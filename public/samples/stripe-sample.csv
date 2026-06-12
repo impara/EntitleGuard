@@ -1,0 +1,25 @@
+Customer ID,Customer Email,Subscription ID,Status,Plan,Amount,Currency,Current Period End,Cancel At Period End
+cus_LqT8wNcEx01,ava@brightlytics.io,sub_9Ka1mB201,active,Pro,79.00,usd,2026-07-02,false
+cus_M3eRtYuIo02,ben@dataforge.dev,sub_9Ka1mB202,active,Scale,199.00,usd,2026-07-05,false
+cus_N8wQpLkJh03,carla@pipewatch.app,sub_9Ka1mB203,canceled,Pro,79.00,usd,2026-05-11,false
+cus_P2sDfGhJk04,dmitri@vectorlab.ai,sub_9Ka1mB204,active,Pro,79.00,usd,2026-07-01,false
+cus_Q7aZxCvBn05,elena@scrapeline.com,sub_9Ka1mB205,past_due,Scale,199.00,usd,2026-06-20,false
+cus_R4mNbVcXz06,felix@quantmetric.io,sub_9Ka1mB206,active,Starter,29.00,usd,2026-07-09,false
+cus_S9pOiUyTr07,gina@renderstack.dev,sub_9Ka1mB207,active,Pro,79.00,usd,2026-06-28,true
+cus_T6eWqAsDf08,hugo@mlpipe.app,sub_9Ka1mB208,unpaid,Pro,79.00,usd,2026-05-30,false
+cus_U1lKjHgFd09,iris@cloudaudit.co,sub_9Ka1mB209,active,Scale,199.00,usd,2026-07-03,false
+cus_V5zXcVbNm10,jonas@apiquota.net,sub_9Ka1mB210,trialing,Pro,79.00,usd,2026-06-24,false
+cus_W8qAzWsXe11,kira@docsignal.io,sub_9Ka1mB211,active,Starter,29.00,usd,2026-07-11,false
+cus_X3rEdCtFv12,leo@gpuburst.dev,sub_9Ka1mB212,active,Scale,199.00,usd,2026-07-06,false
+cus_Y7tGbYhNu13,mara@etlguard.com,sub_9Ka1mB213,canceled,Starter,29.00,usd,2026-04-19,false
+cus_Z2uJmIkOl14,nick@webhookzen.io,sub_9Ka1mB214,active,Pro,79.00,usd,2026-07-08,false
+cus_A6vPqRsTu15,olga@finparse.app,sub_9Ka1mB215,active,Pro,79.00,usd,2026-06-30,false
+cus_B9wXyZaBc16,pavel@loadtestr.dev,sub_9Ka1mB216,incomplete_expired,Starter,29.00,usd,2026-05-02,false
+cus_C4dEfGhIj17,quinn@imgcrunch.io,sub_9Ka1mB217,active,Scale,199.00,usd,2026-07-04,false
+cus_D8kLmNoPq18,rosa@alertdash.com,sub_9Ka1mB218,active,Pro,79.00,usd,2026-07-07,false
+cus_E3rStUvWx19,sam@tokenmeter.ai,sub_9Ka1mB219,active,Scale,199.00,usd,2026-07-10,false
+cus_F7yZaBcDe20,tina@queryvault.dev,sub_9Ka1mB220,paused,Pro,79.00,usd,2026-06-22,false
+cus_G2fGhIjKl21,uri@batchpilot.io,sub_9Ka1mB221,active,Pro,79.00,usd,2026-07-12,false
+cus_H6mNoPqRs22,vera@synthgen.app,sub_9Ka1mB222,active,Starter,29.00,usd,2026-07-02,false
+cus_I9tUvWxYz23,walt@meshmetrics.co,sub_9Ka1mB223,active,Pro,79.00,usd,2026-07-05,false
+cus_J4aBcDeFg24,xena@promptops.dev,sub_9Ka1mB224,active,Scale,199.00,usd,2026-07-09,false
