@@ -51,7 +51,7 @@ const CATEGORIES = [
 ];
 
 const PRIVACY_POINTS = [
-  "Files are parsed and compared in your browser — never uploaded",
+  "Files are parsed and compared in your browser — never sent to our servers",
   "Minimal export by design: matching works on Stripe customer IDs — no names or emails required",
   "No Stripe API keys",
   "No database credentials",
@@ -77,7 +77,7 @@ export default function LandingPage() {
           <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
             Final-state reconciliation — not a webhook fixer. Upload a Stripe export and a
             minimal app entitlement export. The comparison runs locally in your browser. No API
-            keys. No database access. No file upload.
+            keys. No database access. No server upload.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -274,7 +274,7 @@ export default function LandingPage() {
         <footer className="border-t border-edge">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
             <p>EntitleGuard — local-first Stripe-to-app-access reconciliation.</p>
-            <p>CSV files are processed in your browser and never uploaded.</p>
+            <p>CSV files are read locally in your browser and never sent to EntitleGuard.</p>
           </div>
         </footer>
       </main>

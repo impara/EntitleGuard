@@ -218,8 +218,8 @@ export function AuditWizard({ demo = false }: AuditWizardProps) {
 
           <div className="mt-6 flex items-center justify-between gap-4">
             <p className="text-xs text-muted">
-              Files are parsed and compared locally. No upload, no API keys, no database
-              access. The recommended exports contain no names or emails.
+              Files are parsed and compared locally in your browser. No server upload, no API
+              keys, no database access. The recommended exports contain no names or emails.
             </p>
             <button
               type="button"

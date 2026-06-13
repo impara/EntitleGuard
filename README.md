@@ -58,7 +58,7 @@ Join via the CTAs on the audit results page at [entitleguard.amertech.online](ht
 
 ## Privacy model
 
-- CSV files are parsed and reconciled client-side (Web Worker). They are never uploaded.
+- CSV files are parsed and reconciled client-side (Web Worker). They are never sent to our servers.
 - Minimal export by design: the copy-paste SQL exports only internal ID, Stripe customer ID, status, plan, and access flag — no names or emails. Email is an optional fallback join key for databases that don't store `stripe_customer_id`.
 - No Stripe API keys, no database credentials, no login.
 - The server only ever receives: analytics events (scalar props), and — after explicit consent — contact details plus an aggregate audit summary (counts and bucketed exposure, no identifiers).
