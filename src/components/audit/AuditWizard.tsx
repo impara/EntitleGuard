@@ -13,6 +13,7 @@ import type { AppField, AuditInput, ParsedCsv, StripeField } from "@/lib/engine"
 import type { WorkerResponse } from "@/workers/reconcile.worker";
 import { ColumnMapper, type MappingFieldDef } from "./ColumnMapper";
 import { FileDropzone } from "./FileDropzone";
+import { AppExportSqlHelp } from "./AppExportSqlHelp";
 import { ProgressState } from "./ProgressState";
 import { ResultsView } from "./ResultsView";
 import {
@@ -61,39 +62,7 @@ const STRIPE_EXPORT_HELP = (
   </>
 );
 
-const APP_EXPORT_HELP = (
-  <>
-    <p className="mb-2">
-      Minimal Postgres export — adapt table/column names to your schema. It contains no names
-      or emails; matching uses the Stripe customer ID:
-    </p>
-    <pre className="overflow-x-auto rounded bg-black/30 p-2 font-mono text-[11px] leading-relaxed">
-      {`\\copy (
-  SELECT id AS user_id, stripe_customer_id,
-         subscription_status, plan, access_enabled, role
-  FROM users
-) TO 'app-users.csv' WITH CSV HEADER;`}
-    </pre>
-    <p className="mt-2">
-      Prisma:{" "}
-      <span className="font-mono">
-        npx prisma db execute --stdin
-      </span>{" "}
-      with the same query, or export from any admin/BI tool.
-    </p>
-    <p className="mt-2">
-      Only add an <span className="font-mono">email</span> column if you do not store{" "}
-      <span className="font-mono">stripe_customer_id</span> — email then becomes the join key,
-      at lower match confidence.
-    </p>
-    <p className="mt-2">
-      Important: export the access/status columns your request path <em>actually reads</em> —
-      not whatever column happens to be named &quot;status&quot;. If your middleware checks a
-      boolean and a cron job checks a status column, export both; the audit flags rows where
-      your own columns disagree with each other.
-    </p>
-  </>
-);
+const APP_EXPORT_HELP = <AppExportSqlHelp />;
 
 interface AuditWizardProps {
   demo?: boolean;
@@ -241,7 +210,7 @@ export function AuditWizard({ demo = false }: AuditWizardProps) {
               title="2. App user export"
               description="Users / workspaces CSV from your application database."
               csv={state.appCsv}
-              exportHelp={{ label: "Example Postgres/Prisma export SQL", content: APP_EXPORT_HELP }}
+              exportHelp={{ label: "Minimal export SQL (users or workspaces)", content: APP_EXPORT_HELP }}
               onFile={(f) => void handleFile(f, "app")}
               onClear={() => dispatch({ type: "CLEAR_APP_CSV" })}
             />

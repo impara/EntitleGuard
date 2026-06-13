@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EntitleGuard — Stripe-to-Postgres entitlement drift auditor",
+  title: "EntitleGuard — Stripe-to-app-access reconciliation auditor",
   description:
-    "Local-first Stripe-to-Postgres entitlement drift audit for usage-based B2B SaaS. Upload a Stripe export and an app user export — the comparison runs in your browser. No API keys, no database access, no file upload.",
+    "Local-first final-state reconciliation for usage-heavy B2B SaaS on Stripe. Compare Stripe billing state against your app access state — entirely in your browser. Not a webhook fixer. No API keys, no upload.",
 };
 
 export default function RootLayout({

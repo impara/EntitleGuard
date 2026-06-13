@@ -1,8 +1,60 @@
 # EntitleGuard Audit
 
-Local-first **Stripe-to-Postgres entitlement drift auditor for usage-based B2B SaaS**. Read-only by design: it finds mismatches and produces a reconciliation report; it never patches, suspends, or writes anything.
+Local-first **Stripe-to-app-access reconciliation auditor for usage-heavy B2B SaaS**. Read-only by design: it finds mismatches and produces a reconciliation report; it never patches, suspends, or writes anything.
 
-Upload a Stripe export CSV and an app user export CSV. The tool compares them **entirely in the browser** and reports potential entitlement drift: unpaid-but-active users, paid-but-blocked customers, missing billing links, orphaned subscriptions, and ambiguous cases — with estimated monthly exposure.
+Upload a Stripe export CSV and an app entitlement export CSV. The tool compares them **entirely in the browser** and reports potential entitlement drift: unpaid-but-active users, paid-but-blocked customers, missing billing links, orphaned subscriptions, and ambiguous cases — with estimated monthly exposure.
+
+**Initial focus:** Stripe + Postgres-style CSV exports (users or workspaces table). Nightly API-based reconciliation is in beta.
+
+## What this is not
+
+EntitleGuard is **not a webhook retry tool**.
+
+Webhook queues, idempotency, replay, and backfills help ensure events are processed. EntitleGuard checks the **result**: does your **current** app access state actually agree with Stripe's **current** billing state?
+
+It catches cases where the webhook returned 200, but the DB row never ended up reflecting the correct state — failed writes, rollbacks, manual CS overrides, migrations, or later internal changes. It also catches drift that lazy "sync on page view" never heals, because the user never opens the billing page but keeps hitting your API.
+
+This is **final-state reconciliation**, not webhook observability.
+
+## Minimal export SQL
+
+The recommended app export contains only pseudonymous IDs, statuses, and plans — no names or emails. Adapt table/column names to your schema.
+
+**Users table** (per-user billing):
+
+```sql
+SELECT
+  id AS internal_user_id,
+  stripe_customer_id,
+  subscription_status,
+  plan,
+  access_enabled
+FROM users;
+```
+
+**Workspaces table** (team/org billing):
+
+```sql
+SELECT
+  id AS workspace_id,
+  stripe_customer_id,
+  subscription_status,
+  plan,
+  access_enabled
+FROM workspaces;
+```
+
+Export the columns your **request path actually reads** for access decisions. If middleware checks a boolean and a cron checks a status column, include both — the audit flags rows where your own columns disagree.
+
+## What's next after the free audit
+
+The free CSV audit is a one-time reconciliation. If you find drift, the next step is keeping it from coming back:
+
+- **Monitoring beta** ($79/month): nightly Stripe ↔ app diff, Slack/email alerts, review queue — read-only, never auto-fixes
+- **Manual leak audit** ($150): human review of your findings — free if we find nothing
+- **15-minute drift review**: quick call to interpret results and plan remediation
+
+Join via the CTAs on the audit results page at [entitleguard.amertech.online](https://entitleguard.amertech.online).
 
 ## Privacy model
 
@@ -66,6 +118,7 @@ The container listens on port 3000 (not published to the host by default — Coo
 ## Project layout
 
 - `src/lib/engine/` — CSV parsing, column auto-detection, status normalization, tiered matching, category A–E classification, leakage estimation, masking
+- `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
 - `src/workers/reconcile.worker.ts` — runs the engine off the main thread
 - `src/components/audit/` — upload → mapping → run → results wizard
 - `src/app/api/leads`, `src/app/api/events` — zod-validated lead capture and analytics (SQLite at `.data/entitleguard.db`)

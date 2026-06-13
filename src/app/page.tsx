@@ -68,15 +68,16 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="mx-auto max-w-5xl px-4 pb-16 pt-20 text-center">
           <p className="mx-auto mb-4 w-fit rounded-full border border-edge px-3 py-1 text-xs text-muted">
-            Stripe-to-Postgres entitlement drift auditor — for usage-based B2B SaaS
+            Stripe-to-app-access reconciliation — for usage-heavy B2B SaaS
           </p>
           <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
             Find Stripe users who may be{" "}
             <span className="text-danger">unpaid but still active</span> in your app.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
-            Upload a Stripe export and an app user export. The audit runs locally in your
-            browser. No API keys. No database access. No file upload.
+            Final-state reconciliation — not a webhook fixer. Upload a Stripe export and a
+            minimal app entitlement export. The comparison runs locally in your browser. No API
+            keys. No database access. No file upload.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -93,9 +94,23 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-5 text-xs text-muted">
-            Your CSV files never leave your browser. EntitleGuard only receives your contact
-            details if you request the full report or join the monitoring beta.
+            Free one-time audit today → nightly monitoring in beta. Your CSV files never leave
+            your browser.
           </p>
+        </section>
+
+        {/* Differentiation */}
+        <section className="border-t border-edge bg-surface/40">
+          <div className="mx-auto max-w-5xl px-4 py-12">
+            <h2 className="text-xl font-bold">Not a webhook retry tool</h2>
+            <p className="mt-3 max-w-3xl text-muted">
+              Webhook queues, idempotency, and replay help events get processed. EntitleGuard
+              checks the result: does your <strong>current</strong> app access state agree with
+              Stripe&apos;s <strong>current</strong> billing state? It catches cases where the
+              webhook returned 200 but the DB row never updated — failed writes, rollbacks, manual
+              overrides, or internal schema drift.
+            </p>
+          </div>
         </section>
 
         {/* Problem */}
@@ -136,7 +151,7 @@ export default function LandingPage() {
               {
                 step: "1",
                 title: "Export",
-                body: "Export subscriptions from the Stripe Dashboard and users from your database. The included copy-paste SQL exports only IDs, statuses, and plans — no names or emails.",
+                body: "Copy our minimal SQL (users or workspaces table) — IDs, statuses, and plans only, no names or emails. Export subscriptions from the Stripe Dashboard.",
               },
               {
                 step: "2",
@@ -235,9 +250,9 @@ export default function LandingPage() {
               Do Stripe and your database agree? Find out now.
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-muted">
-              Built for B2B SaaS on Stripe + Postgres where an active user costs real money
-              every month — AI, compute, scraping, enrichment, analytics. One
-              unpaid-but-active account pays for the fix many times over.
+              Built for usage-heavy B2B SaaS on Stripe where an active account costs real money
+              every month — AI, compute, scraping, enrichment. Initial focus: Postgres-style
+              exports; nightly API reconciliation in beta.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
               <Link
@@ -258,7 +273,7 @@ export default function LandingPage() {
 
         <footer className="border-t border-edge">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
-            <p>EntitleGuard Audit — local-first Stripe entitlement drift detection.</p>
+            <p>EntitleGuard — local-first Stripe-to-app-access reconciliation.</p>
             <p>CSV files are processed in your browser and never uploaded.</p>
           </div>
         </footer>

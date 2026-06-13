@@ -61,8 +61,8 @@ export function ResultsView({
         <h3 className="text-lg font-semibold">Want this checked automatically every day?</h3>
         <p className="mt-1 text-sm text-muted">
           Drift recurs with every deploy, webhook hiccup, and plan change. EntitleGuard is
-          building daily Stripe-to-database reconciliation with Slack/email alerts, a
-          historical drift log, and webhook failure detection — read-only, no write actions.
+          building nightly Stripe-to-app-access reconciliation with Slack/email alerts and a
+          review queue — read-only, never auto-fixes by default.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           {!leadSubmitted && (
@@ -83,6 +83,13 @@ export function ResultsView({
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => openGate("review_call")}
+            className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
+          >
+            Book a 15-minute drift review
+          </button>
           <button
             type="button"
             onClick={() => openGate("paid_audit")}
