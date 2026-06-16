@@ -8,8 +8,8 @@ import { formatUsd } from "@/lib/format";
 const CATEGORY_ORDER: IssueCategory[] = ["A", "B", "D", "C", "E"];
 
 const CATEGORY_DESCRIPTIONS: Record<IssueCategory, string> = {
-  A: "Stripe shows these subscriptions as canceled/unpaid/past-due, but your app still grants access. Strongest leakage signal.",
-  B: "Stripe shows these customers as paying, but your app blocks or disables them. Customer-experience and churn risk.",
+  A: "Stripe shows canceled/unpaid/past-due, but your app still grants access. Silent cost risk — the user keeps consuming API/compute without opening a ticket.",
+  B: "Stripe shows paying customers, but your app blocks or disables them. Urgent customer-facing risk — likely to contact support within minutes.",
   C: "Active app accounts with no Stripe billing reference. Often comped/internal accounts — confirm they are intentional.",
   D: "Paying Stripe customers with no matching app account. Possible failed provisioning or deleted users.",
   E: "Cases the audit could not classify with confidence. Review manually before drawing conclusions.",

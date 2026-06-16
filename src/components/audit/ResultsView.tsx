@@ -56,21 +56,53 @@ export function ResultsView({
 
       <SummaryDashboard result={result} />
 
-      {/* Conversion CTAs (PRD section 20 + research paper Table 7) */}
+      {(result.summary.unpaidActiveCount > 0 || result.summary.paidBlockedCount > 0) && (
+        <div className="no-print mt-6 rounded-xl border border-edge bg-surface/60 p-5">
+          <h3 className="text-sm font-semibold">Not all drift is equally urgent</h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted">
+            {result.summary.unpaidActiveCount > 0 && (
+              <li>
+                <strong className="text-foreground">Category A (unpaid but active):</strong>{" "}
+                silent cost risk — review with context before acting.
+              </li>
+            )}
+            {result.summary.paidBlockedCount > 0 && (
+              <li>
+                <strong className="text-foreground">Category B (paid but blocked):</strong>{" "}
+                urgent customer-facing risk — prioritize before cron catches it.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       <div className="no-print mt-6 rounded-xl border border-accent/30 bg-accent/5 p-6">
-        <h3 className="text-lg font-semibold">Want this checked automatically every day?</h3>
+        <h3 className="text-lg font-semibold">Book a 15-minute drift review</h3>
         <p className="mt-1 text-sm text-muted">
-          Drift recurs with every deploy, webhook hiccup, and plan change. EntitleGuard is
-          building nightly Stripe-to-app-access reconciliation with Slack/email alerts and a
-          review queue — read-only, never auto-fixes by default.
+          Walk through your findings with someone who has seen this drift pattern before.
+          After the first access incident, a one-time audit often stops feeling sufficient.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => openGate("review_call")}
+            className="rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:opacity-90"
+          >
+            Book a 15-minute drift review
+          </button>
+          <button
+            type="button"
+            onClick={() => openGate("monitoring_beta")}
+            className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
+          >
+            Join the $79/month monitoring beta
+          </button>
           {!leadSubmitted && (
             <>
               <button
                 type="button"
                 onClick={() => openGate("full_report")}
-                className="rounded-lg bg-accent-strong px-4 py-2 text-sm font-semibold text-background hover:opacity-90"
+                className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
               >
                 Send me the full audit report
               </button>
@@ -85,26 +117,17 @@ export function ResultsView({
           )}
           <button
             type="button"
-            onClick={() => openGate("review_call")}
-            className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
-          >
-            Book a 15-minute drift review
-          </button>
-          <button
-            type="button"
             onClick={() => openGate("paid_audit")}
             className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
           >
             $150 manual leak audit — free if we find nothing
           </button>
-          <button
-            type="button"
-            onClick={() => openGate("monitoring_beta")}
-            className="rounded-lg border border-edge px-4 py-2 text-sm font-medium hover:border-accent/60"
-          >
-            Join the $79/month monitoring beta
-          </button>
         </div>
+        <p className="mt-3 text-xs text-muted">
+          Many teams only want continuous checks after their first incident. Monitoring beta:
+          nightly Stripe ↔ app diff, Slack/email alerts, review queue — read-only, never
+          auto-fixes by default.
+        </p>
         {leadSubmitted && (
           <p className="mt-3 text-sm text-accent">
             Thanks — your full report is unlocked below and we will follow up by email.

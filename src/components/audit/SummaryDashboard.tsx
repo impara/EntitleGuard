@@ -73,6 +73,13 @@ export function SummaryDashboard({ result }: { result: AuditResult }) {
             dollar estimate.
           </p>
         )}
+        {s.unpaidActiveCount > 0 && s.paidBlockedCount > 0 && (
+          <p className="mt-3 text-sm text-muted">
+            These findings are not equally urgent: unpaid-but-active is usually silent and
+            cost-facing; paid-but-blocked is customer-facing and likely to surface in support
+            first.
+          </p>
+        )}
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

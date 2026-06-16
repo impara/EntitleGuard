@@ -87,7 +87,12 @@ describe("runAudit end-to-end", () => {
   it("includes recommended actions referencing findings", () => {
     const result = runAudit({ stripe, app, stripeMapping, appMapping });
     expect(result.recommendedActions.some((a) => a.includes("unpaid"))).toBe(true);
-    expect(result.recommendedActions.some((a) => a.toLowerCase().includes("webhook"))).toBe(true);
+    expect(result.recommendedActions.some((a) => a.toLowerCase().includes("override"))).toBe(
+      true,
+    );
+    expect(result.recommendedActions.some((a) => a.toLowerCase().includes("recurring"))).toBe(
+      true,
+    );
   });
 
   it("collapses cancel+resubscribe customers and flags self-contradicting app rows", () => {

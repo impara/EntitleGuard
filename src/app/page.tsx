@@ -15,19 +15,27 @@ const DRIFT_CAUSES = [
     title: "Deploys and migrations",
     body: "Every schema migration, billing rule change, and refactor introduces new edge cases between Stripe and your access checks.",
   },
+  {
+    title: "Manual CS/admin overrides",
+    body: "Support or an admin changes app access without updating Stripe. No webhook pipeline catches this — the billing record and the access flag simply disagree.",
+  },
+  {
+    title: "Acknowledged but not reflected",
+    body: "A Stripe event was acknowledged, but final app access state never changed correctly — failed writes, rollbacks, wrong row updated, async job failure after ack, or local state overwritten later.",
+  },
 ];
 
 const CATEGORIES = [
   {
     id: "A",
     label: "Unpaid but active",
-    body: "Canceled, unpaid, or past-due in Stripe — still consuming your product (and your API/GPU bill).",
+    body: "Canceled, unpaid, or past-due in Stripe — still consuming your product (and your API/GPU bill). Silent, cost-facing risk.",
     severity: "High",
   },
   {
     id: "B",
     label: "Paid but blocked",
-    body: "Paying customers your app marks inactive or blocked. Silent churn risk.",
+    body: "Paying customers your app marks inactive or blocked — they'll email support before your cron catches it. Urgent, customer-facing risk.",
     severity: "High",
   },
   {
@@ -94,21 +102,37 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-5 text-xs text-muted">
-            Free one-time audit today → nightly monitoring in beta. Your CSV files never leave
-            your browser.
+            Free one-time audit today. After the first access incident, many teams only want
+            continuous checks — nightly monitoring is in beta. Your CSV files never leave your
+            browser.
           </p>
         </section>
 
         {/* Differentiation */}
         <section className="border-t border-edge bg-surface/40">
           <div className="mx-auto max-w-5xl px-4 py-12">
-            <h2 className="text-xl font-bold">Not a webhook retry tool</h2>
+            <h2 className="text-xl font-bold">Two layers — not a webhook retry tool</h2>
             <p className="mt-3 max-w-3xl text-muted">
-              Webhook queues, idempotency, and replay help events get processed. EntitleGuard
-              checks the result: does your <strong>current</strong> app access state agree with
-              Stripe&apos;s <strong>current</strong> billing state? It catches cases where the
-              webhook returned 200 but the DB row never updated — failed writes, rollbacks, manual
-              overrides, or internal schema drift.
+              Mature Stripe integrations usually need both layers. EntitleGuard is the second
+              one — final-state reconciliation after your webhook infrastructure.
+            </p>
+            <ul className="mt-4 max-w-3xl space-y-2 text-sm text-muted">
+              <li>
+                <strong className="text-foreground">Webhook reliability</strong> — did we
+                receive and process the Stripe event correctly? Queues, idempotency, and replay
+                help here.
+              </li>
+              <li>
+                <strong className="text-foreground">Final-state reconciliation</strong> — does
+                your current app access state agree with Stripe&apos;s current billing state?
+                EntitleGuard checks this result, regardless of how you got there.
+              </li>
+            </ul>
+            <p className="mt-4 max-w-3xl text-sm text-muted">
+              Lazy sync on page view only heals accounts that open the billing page again. It
+              does not catch users who keep hitting your API while Stripe says canceled. It also
+              misses acknowledged-but-not-reflected cases — webhook returned 200, but the access
+              row never updated.
             </p>
           </div>
         </section>
@@ -132,7 +156,7 @@ export default function LandingPage() {
               one-off cron script will not keep honest across deploys, status vocabularies,
               and plan changes.
             </p>
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {DRIFT_CAUSES.map((cause) => (
                 <div key={cause.title} className="rounded-xl border border-edge bg-surface p-5">
                   <h3 className="font-semibold">{cause.title}</h3>
@@ -212,6 +236,11 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
+            <p className="mt-6 max-w-3xl text-sm text-muted">
+              Category A is usually silent and cost-facing — users keep consuming without opening
+              a ticket. Category B is customer-facing and urgent — paying customers are likely to
+              contact support before your cron catches it.
+            </p>
           </div>
         </section>
 

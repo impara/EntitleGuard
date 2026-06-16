@@ -48,7 +48,7 @@ export function computeDataQualityScore(
   return Math.round((mappingScore * 0.6 + fillScore * 0.4) * 100);
 }
 
-/** Recommended next actions (PRD section 19). */
+/** Recommended next actions after an audit. */
 export function buildRecommendedActions(summary: AuditSummary): string[] {
   const actions: string[] = [];
   if (summary.unpaidActiveCount > 0) {
@@ -56,12 +56,24 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
       `Review the ${summary.unpaidActiveCount} account(s) that appear unpaid in Stripe but still active in your app.`,
     );
     actions.push(
-      "Check your webhook logs for failed customer.subscription.deleted / invoice.payment_failed events.",
+      "Check for manual admin/support overrides and app-side changes outside the webhook handler.",
+    );
+    actions.push(
+      "Look for migrations, backfills, or manual plan changes that may have desynced access state.",
+    );
+    actions.push(
+      "Verify cases where a Stripe event was acknowledged but final app access never updated correctly (failed writes, rollbacks, wrong row).",
+    );
+    actions.push(
+      "Confirm which column your access check actually reads — resolve internal conflicts between access flags and status columns.",
     );
   }
   if (summary.paidBlockedCount > 0) {
     actions.push(
-      `Investigate the ${summary.paidBlockedCount} paying customer(s) your app marks as blocked or inactive — churn risk.`,
+      `Investigate the ${summary.paidBlockedCount} paying customer(s) your app marks as blocked or inactive.`,
+    );
+    actions.push(
+      "Prioritize these — paying customers are likely to notice before your team does.",
     );
   }
   if (summary.missingBillingLinkCount > 0) {
@@ -84,7 +96,9 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
       "No drift detected in this export. Re-run the audit after your next deploy or billing change to keep it that way.",
     );
   } else {
-    actions.push("Add a recurring reconciliation job — drift recurs with every deploy, webhook hiccup, and plan change.");
+    actions.push(
+      "After the first access incident, a one-time audit often stops feeling sufficient. Consider recurring reconciliation — drift recurs with deploys, overrides, and failed writes.",
+    );
   }
   return actions;
 }
@@ -97,8 +111,8 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
 export const SQL_CHECKS: { title: string; sql: string }[] = [
   {
     title: "Unpaid in Stripe but active in your app",
-    sql: `-- Adapt table/column names to your schema.
-SELECT u.id, u.email, u.plan, u.access_enabled
+    sql: `-- Adapt table/column names to your schema. Minimal fields only — no emails.
+SELECT u.id AS internal_user_id, u.stripe_customer_id, u.plan, u.access_enabled
 FROM users u
 JOIN stripe_subscriptions s ON s.customer_id = u.stripe_customer_id
 WHERE s.status IN ('canceled', 'unpaid', 'past_due', 'incomplete_expired')
@@ -106,7 +120,7 @@ WHERE s.status IN ('canceled', 'unpaid', 'past_due', 'incomplete_expired')
   },
   {
     title: "Paid in Stripe but blocked in your app",
-    sql: `SELECT u.id, u.email, u.status
+    sql: `SELECT u.id AS internal_user_id, u.stripe_customer_id, u.status, u.access_enabled
 FROM users u
 JOIN stripe_subscriptions s ON s.customer_id = u.stripe_customer_id
 WHERE s.status IN ('active', 'trialing')
@@ -114,7 +128,7 @@ WHERE s.status IN ('active', 'trialing')
   },
   {
     title: "Active users with no billing reference",
-    sql: `SELECT u.id, u.email, u.plan
+    sql: `SELECT u.id AS internal_user_id, u.stripe_customer_id, u.plan, u.access_enabled
 FROM users u
 WHERE u.access_enabled = true
   AND (u.stripe_customer_id IS NULL OR u.stripe_customer_id = '')
@@ -123,7 +137,7 @@ WHERE u.access_enabled = true
   {
     title: "Stripe customers with no app account (export Stripe IDs first)",
     sql: `-- Load your Stripe customer export into a temp table, then:
-SELECT s.customer_id, s.email, s.status
+SELECT s.customer_id, s.status
 FROM stripe_export s
 LEFT JOIN users u ON u.stripe_customer_id = s.customer_id
 WHERE u.id IS NULL AND s.status IN ('active', 'trialing');`,

@@ -16,6 +16,15 @@ It catches cases where the webhook returned 200, but the DB row never ended up r
 
 This is **final-state reconciliation**, not webhook observability.
 
+## Two layers
+
+Mature Stripe integrations usually need both:
+
+1. **Webhook reliability** — did we receive and process the Stripe event correctly? Queues, idempotency, and replay help here.
+2. **Final-state reconciliation** — does your **current** app access state agree with Stripe's **current** billing state? EntitleGuard checks this result, regardless of how you got there.
+
+Lazy sync on page view only heals accounts that open the billing page again. It does not catch users who keep hitting your API while Stripe says canceled, manual CS/admin overrides, or acknowledged-but-not-reflected cases where the webhook returned 200 but the access row never updated.
+
 ## Minimal export SQL
 
 The recommended app export contains only pseudonymous IDs, statuses, and plans — no names or emails. Adapt table/column names to your schema.
@@ -50,7 +59,12 @@ Export the columns your **request path actually reads** for access decisions. If
 
 The free CSV audit is a one-time reconciliation. If you find drift, the next step is keeping it from coming back:
 
-- **Monitoring beta** ($79/month): nightly Stripe ↔ app diff, Slack/email alerts, review queue — read-only, never auto-fixes
+- **Monitoring beta** ($79/month, planned):
+  - Nightly Stripe ↔ app diff
+  - **Two alert tiers:** urgent (Category B — paid but blocked) vs review queue (A/C/D/E)
+  - Flag only — never auto-fix by default
+  - Slack/email alerts and a human review queue
+  - Many teams only want continuous checks after their first incident
 - **Manual leak audit** ($150): human review of your findings — free if we find nothing
 - **15-minute drift review**: quick call to interpret results and plan remediation
 
