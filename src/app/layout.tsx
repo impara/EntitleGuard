@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   title: "EntitleGuard — Stripe-to-app-access reconciliation auditor",
   description:
     "Local-first final-state reconciliation for usage-heavy B2B SaaS on Stripe. Compare Stripe billing state against your app access state — entirely in your browser. Not a webhook fixer. No API keys, no server upload.",
+  verification: {
+    google: "O4-k04comryHYUDVjLLnEe23MjUNS8N5uizZ_y0e1bE",
+  },
 };
 
 export default function RootLayout({
