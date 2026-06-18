@@ -6,6 +6,8 @@ Upload a Stripe export CSV and an app entitlement export CSV. The tool compares 
 
 **Initial focus:** Stripe + Postgres-style CSV exports (users or workspaces table). Nightly API-based reconciliation is in beta.
 
+**Live app:** [entitleguard.amertech.online](https://entitleguard.amertech.online) · [Example report](https://entitleguard.amertech.online/audit?demo=1)
+
 ## What this is not
 
 EntitleGuard is **not a webhook retry tool**.
@@ -68,7 +70,7 @@ The free CSV audit is a one-time reconciliation. If you find drift, the next ste
 - **Manual leak audit** ($150): human review of your findings — free if we find nothing
 - **15-minute drift review**: quick call to interpret results and plan remediation
 
-Join via the CTAs on the audit results page at [entitleguard.amertech.online](https://entitleguard.amertech.online).
+Join via the CTAs on the [audit results page](https://entitleguard.amertech.online/audit).
 
 ## Privacy model
 
@@ -87,6 +89,10 @@ Join via the CTAs on the audit results page at [entitleguard.amertech.online](ht
 - Vitest for engine tests
 
 ## Getting started
+
+No setup required — [run the free audit in your browser](https://entitleguard.amertech.online/audit).
+
+To run locally:
 
 ```bash
 npm install
