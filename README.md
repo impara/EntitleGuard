@@ -8,6 +8,17 @@ Upload a Stripe export CSV and an app entitlement export CSV. The tool compares 
 
 **Live app:** [entitleguard.amertech.online](https://entitleguard.amertech.online) · [Example report](https://entitleguard.amertech.online/audit?demo=1)
 
+![EntitleGuard demo report](public/entitleguard-demo-report.png)
+
+## Who this is not for
+
+EntitleGuard is intentionally narrow. It is probably not useful for:
+
+- Apps that check Stripe live on every request and do not keep local entitlement state.
+- Very early SaaS products with a handful of customers and no meaningful usage cost.
+- Teams looking for a webhook retry queue, dead-letter replay tool, or automatic suspension system.
+- Companies that need vendor-hosted procurement, SOC 2 review, or enterprise SSO before running any audit.
+
 ## What this is not
 
 EntitleGuard is **not a webhook retry tool**.

@@ -67,6 +67,13 @@ const PRIVACY_POINTS = [
   "We only receive contact details if you request the full report",
 ];
 
+const NOT_FOR = [
+  "Apps that check Stripe live on every request and do not keep local entitlement state",
+  "Very early SaaS products with a handful of customers and no meaningful usage cost",
+  "Teams looking for a webhook retry queue, dead-letter replay tool, or automatic suspension system",
+  "Companies that need vendor-hosted procurement, SOC 2 review, or enterprise SSO before running any audit",
+];
+
 export default function LandingPage() {
   return (
     <>
@@ -79,8 +86,7 @@ export default function LandingPage() {
             Stripe-to-app-access reconciliation — for usage-heavy B2B SaaS
           </p>
           <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
-            Find Stripe users who may be{" "}
-            <span className="text-danger">unpaid but still active</span> in your app.
+            Find Stripe users who may be unpaid but still active in your app.
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
             Final-state reconciliation — not a webhook fixer. Upload a Stripe export and a
@@ -99,6 +105,12 @@ export default function LandingPage() {
               className="rounded-lg border border-edge px-6 py-3 font-medium hover:border-accent/60"
             >
               See example report
+            </Link>
+            <Link
+              href="https://github.com/impara/EntitleGuard"
+              className="rounded-lg border border-edge px-6 py-3 font-medium hover:border-accent/60"
+            >
+              View source on GitHub
             </Link>
           </div>
           <p className="mt-5 text-xs text-muted">
@@ -244,6 +256,24 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Fit */}
+        <section className="border-t border-edge bg-surface/40">
+          <div className="mx-auto max-w-5xl px-4 py-16">
+            <h2 className="text-2xl font-bold">Who this is not for</h2>
+            <p className="mt-3 max-w-3xl text-muted">
+              EntitleGuard is a read-only reconciliation backstop for existing SaaS teams with
+              local billing/access state. It is intentionally narrow.
+            </p>
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {NOT_FOR.map((item) => (
+                <div key={item} className="rounded-xl border border-edge bg-surface p-4 text-sm text-muted">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Privacy */}
         <section className="mx-auto max-w-5xl px-4 py-16">
           <div className="grid items-center gap-10 md:grid-cols-2">
@@ -259,6 +289,16 @@ export default function LandingPage() {
                 exporting customer records remains your responsibility under GDPR and your own
                 data policies. That is why the recommended export is minimal: pseudonymous IDs,
                 statuses, and plans. No names or emails are required.
+              </p>
+              <p className="mt-3 text-sm text-muted">
+                Want to verify the local-only implementation? The source is public on{" "}
+                <Link
+                  href="https://github.com/impara/EntitleGuard"
+                  className="font-medium text-accent hover:underline"
+                >
+                  GitHub
+                </Link>
+                .
               </p>
             </div>
             <ul className="space-y-3">
@@ -303,7 +343,12 @@ export default function LandingPage() {
         <footer className="border-t border-edge">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
             <p>EntitleGuard — local-first Stripe-to-app-access reconciliation.</p>
-            <p>CSV files are read locally in your browser and never sent to EntitleGuard.</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p>CSV files are read locally in your browser and never sent to EntitleGuard.</p>
+              <Link href="https://github.com/impara/EntitleGuard" className="text-accent hover:underline">
+                GitHub
+              </Link>
+            </div>
           </div>
         </footer>
       </main>

@@ -2,6 +2,21 @@
   "name": "entitleguard",
   "version": "0.1.0",
   "private": true,
+  "description": "Local-first Stripe-to-app-access reconciliation auditor for usage-heavy B2B SaaS.",
+  "homepage": "https://entitleguard.amertech.online",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/impara/EntitleGuard.git"
+  },
+  "keywords": [
+    "stripe",
+    "saas",
+    "entitlements",
+    "billing",
+    "reconciliation",
+    "csv",
+    "nextjs"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
