@@ -25,6 +25,7 @@ export function ResultsView({
   onRestart,
 }: ResultsViewProps) {
   const [modalRequest, setModalRequest] = useState<LeadRequestType | null>(null);
+  const manualOverrideCount = result.issues.filter((issue) => issue.manualOverride).length;
 
   const openGate = (request: LeadRequestType) => {
     if (leadSubmitted) return;
@@ -56,23 +57,38 @@ export function ResultsView({
 
       <SummaryDashboard result={result} />
 
-      {(result.summary.unpaidActiveCount > 0 || result.summary.paidBlockedCount > 0) && (
+      {(result.summary.unpaidActiveCount > 0 ||
+        result.summary.paidBlockedCount > 0 ||
+        manualOverrideCount > 0) && (
         <div className="no-print mt-6 rounded-xl border border-edge bg-surface/60 p-5">
-          <h3 className="text-sm font-semibold">Not all drift is equally urgent</h3>
+          <h3 className="text-sm font-semibold">Direction changes the safe response</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-muted">
-            {result.summary.unpaidActiveCount > 0 && (
-              <li>
-                <strong className="text-foreground">Category A (unpaid but active):</strong>{" "}
-                silent cost risk — review with context before acting.
-              </li>
-            )}
             {result.summary.paidBlockedCount > 0 && (
               <li>
-                <strong className="text-foreground">Category B (paid but blocked):</strong>{" "}
-                urgent customer-facing risk — prioritize before cron catches it.
+                <strong className="text-foreground">Grant direction (paid but blocked):</strong>{" "}
+                urgent customer-facing risk. After verifying identity and billing state, restoring
+                access is the safer direction to fast-track or automate.
+              </li>
+            )}
+            {result.summary.unpaidActiveCount > 0 && (
+              <li>
+                <strong className="text-foreground">Revoke direction (unpaid but active):</strong>{" "}
+                silent cost risk, but do not revoke from one observation. Require several
+                consecutive agreeing runs and send exceptions to a review queue.
+              </li>
+            )}
+            {manualOverrideCount > 0 && (
+              <li>
+                <strong className="text-foreground">Explicit overrides:</strong>{" "}
+                {manualOverrideCount} finding(s) carry a human exception marker. Preserve the
+                marker and its reason instead of repeatedly undoing the same intentional change.
               </li>
             )}
           </ul>
+          <p className="mt-3 text-xs text-muted">
+            In recurring monitoring, keep every observation and trend mismatch rate over time.
+            Silent healing must not erase the signal that a webhook or access path is degrading.
+          </p>
         </div>
       )}
 
@@ -124,9 +140,9 @@ export function ResultsView({
           </button>
         </div>
         <p className="mt-3 text-xs text-muted">
-          Many teams only want continuous checks after their first incident. Monitoring beta:
-          nightly Stripe ↔ app diff, Slack/email alerts, review queue — read-only, never
-          auto-fixes by default.
+          Monitoring beta: nightly Stripe ↔ app diff, mismatch-rate history, direction-aware
+          alerts, explicit override preservation, and a review queue. Read-only by default;
+          revoke candidates require repeated agreement before any future automation.
         </p>
         {leadSubmitted && (
           <p className="mt-3 text-sm text-accent">
