@@ -2,7 +2,7 @@
 
 Local-first **Stripe-to-app-access reconciliation auditor for usage-heavy B2B SaaS**. Read-only by design: it finds mismatches and produces a reconciliation report; it never patches, suspends, or writes anything.
 
-Upload a Stripe export CSV and an app entitlement export CSV. The tool compares them **entirely in the browser** and reports potential entitlement drift: unpaid-but-active users, paid-but-blocked customers, missing billing links, orphaned subscriptions, and ambiguous cases — with estimated monthly exposure.
+Upload a Stripe export CSV and an app entitlement export CSV. The tool compares them **entirely in the browser** and reports potential entitlement drift: unpaid-but-active users, paid-but-blocked customers, missing billing links, orphaned subscriptions, ambiguous cases, and explicitly marked manual overrides — with estimated monthly exposure.
 
 **Initial focus:** Stripe + Postgres-style CSV exports (users or workspaces table). Nightly API-based reconciliation is in beta.
 
@@ -38,6 +38,16 @@ Mature Stripe integrations usually need both:
 
 Lazy sync on page view only heals accounts that open the billing page again. It does not catch users who keep hitting your API while Stripe says canceled, manual CS/admin overrides, or acknowledged-but-not-reflected cases where the webhook returned 200 but the access row never updated.
 
+## Direction-aware reconciliation policy
+
+Grant and revoke mismatches do not have the same blast radius:
+
+- **Grant direction** — Stripe says paid/active while the app blocks access. After identity and billing state are verified, restoring paid access is the safer direction to fast-track or automate.
+- **Revoke direction** — Stripe says canceled/unpaid while the app still grants access. Do not revoke from one observation. Require several consecutive agreeing runs and send exceptions to a review queue.
+- **Manual overrides** — comped, hand-granted, or manually blocked accounts should carry an explicit override flag and reason. The audit preserves these as review findings instead of treating them as ordinary leakage.
+
+For recurring monitoring, retain every observation and trend mismatch rate over time. A healing job should record the mismatch before correcting it; otherwise the system hides the signal that a webhook or access path is degrading.
+
 ## Minimal export SQL
 
 The recommended app export contains only pseudonymous IDs, statuses, and plans — no names or emails. Adapt table/column names to your schema.
@@ -68,15 +78,26 @@ FROM workspaces;
 
 Export the columns your **request path actually reads** for access decisions. If middleware checks a boolean and a cron checks a status column, include both — the audit flags rows where your own columns disagree.
 
+If intentional exceptions exist, also export optional columns using recognizable headers such as:
+
+```sql
+manual_access_override,
+manual_override_reason
+```
+
+Accepted override flag values include `true`/`false`, `1`/`0`, and `yes`/`no`. A reason is strongly recommended so the exception has durable provenance.
+
 ## What's next after the free audit
 
 The free CSV audit is a one-time reconciliation. If you find drift, the next step is keeping it from coming back:
 
 - **Monitoring beta** ($79/month, planned):
   - Nightly Stripe ↔ app diff
-  - **Two alert tiers:** urgent (Category B — paid but blocked) vs review queue (A/C/D/E)
-  - Flag only — never auto-fix by default
-  - Slack/email alerts and a human review queue
+  - Mismatch history and rate trends, so healing never hides a degrading path
+  - Direction-aware handling: grant candidates prioritized; revoke candidates require repeated agreement
+  - Explicit manual-override preservation and human review queue
+  - Slack/email alerts
+  - Read-only by default — never auto-fix by default
   - Many teams only want continuous checks after their first incident
 - **Manual leak audit** ($150): human review of your findings — free if we find nothing
 - **15-minute drift review**: quick call to interpret results and plan remediation
