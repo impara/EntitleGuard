@@ -5,6 +5,7 @@ import type {
   MatchedPair,
   NormalizedAppRecord,
   NormalizedStripeRecord,
+  ReconciliationDirection,
 } from "./types";
 
 /**
@@ -14,7 +15,8 @@ import type {
  *  B — Paid but blocked       (Stripe PAID, app ACCESS_OFF)         high severity
  *  C — Missing billing link   (app user, no billing ref, access on) medium severity
  *  D — Orphaned Stripe sub    (paying Stripe customer, no app user) medium severity
- *  E — Ambiguous state        (unknown statuses, collisions, internal accounts)
+ *  E — Ambiguous state        (unknown statuses, collisions, internal accounts,
+ *                               explicit manual overrides)
  */
 
 let issueCounter = 0;
@@ -39,6 +41,9 @@ function baseIssue(
   | "stripeStatus"
   | "appStatus"
   | "plan"
+  | "reconciliationDirection"
+  | "manualOverride"
+  | "overrideReason"
 > {
   return {
     maskedEmail: maskEmail(app?.email ?? stripe?.email ?? null),
@@ -47,6 +52,42 @@ function baseIssue(
     stripeStatus: stripe?.rawStatus ?? null,
     appStatus: app?.rawStatus ?? app?.rawAccessFlag ?? null,
     plan: app?.plan ?? stripe?.plan ?? null,
+    reconciliationDirection: null,
+    manualOverride: app?.manualOverride ?? false,
+    overrideReason: app?.overrideReason ?? null,
+  };
+}
+
+function mismatchDirection(pair: MatchedPair): ReconciliationDirection | null {
+  if (pair.stripe.billingState === "UNPAID" && pair.app.accessState === "ACCESS_ON") {
+    return "revoke";
+  }
+  if (pair.stripe.billingState === "PAID" && pair.app.accessState === "ACCESS_OFF") {
+    return "grant";
+  }
+  return null;
+}
+
+function classifyExplicitOverride(
+  pair: MatchedPair,
+  direction: ReconciliationDirection,
+): Issue {
+  const { stripe, app, tier } = pair;
+  const action = direction === "grant" ? "grant access" : "revoke access";
+  const reason = app.overrideReason
+    ? ` Reason: "${app.overrideReason}".`
+    : " No override reason was exported; add one so the exception has clear provenance.";
+
+  return {
+    id: nextId("E"),
+    category: "E",
+    severity: app.overrideReason ? "low" : "medium",
+    confidence: "needs_review",
+    explanation: `Stripe and app access disagree, but the app export explicitly marks this as a manual override. A reconciler must preserve this exception instead of repeatedly trying to ${action}.${reason}`,
+    ...baseIssue(stripe, app),
+    reconciliationDirection: direction,
+    estimatedMonthlyValue: null,
+    matchTier: tier,
   };
 }
 
@@ -83,6 +124,11 @@ function classifyMatch(pair: MatchedPair): Issue | null {
     };
   }
 
+  const direction = mismatchDirection(pair);
+  if (direction && app.manualOverride) {
+    return classifyExplicitOverride(pair, direction);
+  }
+
   if (stripe.billingState === "UNPAID" && app.accessState === "ACCESS_ON") {
     if (app.looksInternal) {
       return {
@@ -92,6 +138,7 @@ function classifyMatch(pair: MatchedPair): Issue | null {
         confidence: "needs_review",
         explanation: `Stripe shows "${stripe.rawStatus}" but the app account is active. The account looks internal/admin ("${app.role}"), so this may be intentional.`,
         ...baseIssue(stripe, app),
+        reconciliationDirection: "revoke",
         estimatedMonthlyValue: null,
         matchTier: tier,
       };
@@ -101,8 +148,9 @@ function classifyMatch(pair: MatchedPair): Issue | null {
       category: "A",
       severity: "high",
       confidence,
-      explanation: `Stripe shows this subscription as "${stripe.rawStatus}" but the app still grants access${app.plan ? ` on plan "${app.plan}"` : ""}. Potential unpaid usage.`,
+      explanation: `Stripe shows this subscription as "${stripe.rawStatus}" but the app still grants access${app.plan ? ` on plan "${app.plan}"` : ""}. This is a revoke-direction candidate: review it and require repeated agreement before any automated access removal.`,
       ...baseIssue(stripe, app),
+      reconciliationDirection: "revoke",
       estimatedMonthlyValue: stripe.monthlyValue,
       matchTier: tier,
     };
@@ -114,8 +162,9 @@ function classifyMatch(pair: MatchedPair): Issue | null {
       category: "B",
       severity: "high",
       confidence,
-      explanation: `Stripe shows an active/paid subscription ("${stripe.rawStatus}") but the app marks this account as "${app.rawStatus ?? app.rawAccessFlag}". A paying customer may be blocked.`,
+      explanation: `Stripe shows an active/paid subscription ("${stripe.rawStatus}") but the app marks this account as "${app.rawStatus ?? app.rawAccessFlag}". This is a grant-direction candidate and a paying customer may be blocked.`,
       ...baseIssue(stripe, app),
+      reconciliationDirection: "grant",
       estimatedMonthlyValue: null,
       matchTier: tier,
     };
@@ -177,6 +226,20 @@ function classifyUnmatchedApp(app: NormalizedAppRecord): Issue | null {
   }
 
   if (app.accessState !== "ACCESS_ON") return null; // disabled free user — fine
+  if (app.manualOverride) {
+    return {
+      id: nextId("E"),
+      category: "E",
+      severity: app.overrideReason ? "low" : "medium",
+      confidence: "needs_review",
+      explanation: app.overrideReason
+        ? `Active app account with no billing reference, explicitly marked as a manual override. Reason: "${app.overrideReason}". Preserve this exception during reconciliation.`
+        : "Active app account with no billing reference, explicitly marked as a manual override but without an exported reason. Add override provenance before automating reconciliation.",
+      ...baseIssue(null, app),
+      estimatedMonthlyValue: null,
+      matchTier: null,
+    };
+  }
   if (app.looksFreePlan || app.looksInternal) {
     return {
       id: nextId("E"),
@@ -195,7 +258,7 @@ function classifyUnmatchedApp(app: NormalizedAppRecord): Issue | null {
     category: "C",
     severity: "medium",
     confidence: "needs_review",
-    explanation: `Active app account${app.plan ? ` on plan "${app.plan}"` : ""} with no Stripe customer ID or recognizable billing reference. May be a comped/internal account — confirm it is intentional.`,
+    explanation: `Active app account${app.plan ? ` on plan "${app.plan}"` : ""} with no Stripe customer ID or recognizable billing reference. May be a comped/internal account — confirm it is intentional and mark it explicitly if so.`,
     ...baseIssue(null, app),
     estimatedMonthlyValue: null,
     matchTier: null,
@@ -209,8 +272,9 @@ function classifyUnmatchedStripe(stripe: NormalizedStripeRecord): Issue | null {
     category: "D",
     severity: "medium",
     confidence: "medium",
-    explanation: `Stripe shows an active/paying subscription ("${stripe.rawStatus}") but no matching app account was found. Possible deleted user, changed email, or failed provisioning — a paying customer may be unable to access the product.`,
+    explanation: `Stripe shows an active/paying subscription ("${stripe.rawStatus}") but no matching app account was found. This is a grant-direction provisioning candidate: verify the identity and restore or create access promptly.`,
     ...baseIssue(stripe, null),
+    reconciliationDirection: "grant",
     estimatedMonthlyValue: stripe.monthlyValue,
     matchTier: null,
   };
