@@ -41,9 +41,8 @@ export function AppExportSqlHelp() {
         {template.copyCommand}
       </pre>
       <p className="mt-2">
-        Prisma:{" "}
-        <span className="font-mono">npx prisma db execute --stdin</span> with the query above,
-        or export from any admin/BI tool.
+        Prisma: <span className="font-mono">npx prisma db execute --stdin</span> with the query
+        above, or export from any admin/BI tool.
       </p>
       <p className="mt-2">
         Only add an <span className="font-mono">email</span> column if you do not store{" "}
@@ -55,6 +54,12 @@ export function AppExportSqlHelp() {
         whatever column happens to be named &quot;status&quot;. If your middleware checks a
         boolean and a cron job checks a status column, export both; the audit flags rows where
         your own columns disagree with each other.
+      </p>
+      <p className="mt-2">
+        If your team grants comps or other intentional exceptions, also export a boolean such as{" "}
+        <span className="font-mono">manual_access_override</span> and an optional{" "}
+        <span className="font-mono">manual_override_reason</span>. EntitleGuard preserves these
+        as explicit review cases instead of reporting them as ordinary leakage.
       </p>
     </>
   );
