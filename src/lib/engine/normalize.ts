@@ -196,6 +196,8 @@ export function normalizeAppRecords(
       internalConflict: detectAccessConflict(rawStatus, rawAccessFlag),
       plan,
       role,
+      manualOverride: parseBoolean(cell(row, mapping.manualOverride)) === true,
+      overrideReason: cell(row, mapping.overrideReason),
       looksInternal: INTERNAL_ROLE_HINTS.some((hint) => roleLower.includes(hint)),
       looksFreePlan: FREE_PLAN_HINTS.some((hint) => planLower === hint || planLower.startsWith(`${hint} `)),
     };
