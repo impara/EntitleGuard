@@ -8,11 +8,11 @@ import { formatUsd } from "@/lib/format";
 const CATEGORY_ORDER: IssueCategory[] = ["A", "B", "D", "C", "E"];
 
 const CATEGORY_DESCRIPTIONS: Record<IssueCategory, string> = {
-  A: "Stripe shows canceled/unpaid/past-due, but your app still grants access. Silent cost risk — the user keeps consuming API/compute without opening a ticket.",
-  B: "Stripe shows paying customers, but your app blocks or disables them. Urgent customer-facing risk — likely to contact support within minutes.",
-  C: "Active app accounts with no Stripe billing reference. Often comped/internal accounts — confirm they are intentional.",
-  D: "Paying Stripe customers with no matching app account. Possible failed provisioning or deleted users.",
-  E: "Cases the audit could not classify with confidence. Review manually before drawing conclusions.",
+  A: "Revoke direction: Stripe shows canceled/unpaid/past-due, but your app still grants access. Review first and require repeated agreement before automated revocation.",
+  B: "Grant direction: Stripe shows paying customers, but your app blocks or disables them. Urgent customer-facing risk.",
+  C: "Active app accounts with no Stripe billing reference. Often comped/internal accounts — confirm and mark intentional overrides explicitly.",
+  D: "Grant direction: paying Stripe customers with no matching app account. Possible failed provisioning or deleted users.",
+  E: "Ambiguous states and explicit human overrides. Preserve intentional exceptions and review the rest manually.",
 };
 
 const SEVERITY_BADGE: Record<Issue["severity"], string> = {
@@ -65,6 +65,8 @@ function CategorySection({ category, issues }: { category: IssueCategory; issues
                 <th className="py-1.5 pr-4 font-medium">Stripe customer</th>
                 <th className="py-1.5 pr-4 font-medium">Stripe status</th>
                 <th className="py-1.5 pr-4 font-medium">App status</th>
+                <th className="py-1.5 pr-4 font-medium">Direction</th>
+                <th className="py-1.5 pr-4 font-medium">Override</th>
                 <th className="py-1.5 pr-4 font-medium">Plan</th>
                 <th className="py-1.5 pr-4 font-medium">Value/mo</th>
                 <th className="py-1.5 font-medium">Confidence</th>
@@ -77,6 +79,12 @@ function CategorySection({ category, issues }: { category: IssueCategory; issues
                   <td className="py-2 pr-4">{issue.maskedCustomerId ?? "—"}</td>
                   <td className="py-2 pr-4">{issue.stripeStatus ?? "—"}</td>
                   <td className="py-2 pr-4">{issue.appStatus ?? "—"}</td>
+                  <td className="py-2 pr-4 font-sans capitalize">
+                    {issue.reconciliationDirection ?? "—"}
+                  </td>
+                  <td className="py-2 pr-4 font-sans">
+                    {issue.manualOverride ? issue.overrideReason ?? "Explicit" : "—"}
+                  </td>
                   <td className="py-2 pr-4">{issue.plan ?? "—"}</td>
                   <td className="py-2 pr-4 tabular-nums">
                     {issue.estimatedMonthlyValue !== null
