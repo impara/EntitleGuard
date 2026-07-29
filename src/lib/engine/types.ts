@@ -55,6 +55,8 @@ export const APP_FIELDS = [
   "plan",
   "accessEnabled",
   "role",
+  "manualOverride",
+  "overrideReason",
   "createdAt",
   "lastActiveAt",
 ] as const;
@@ -106,6 +108,10 @@ export interface NormalizedAppRecord {
   internalConflict: boolean;
   plan: string | null;
   role: string | null;
+  /** Explicitly marks intentionally comped, hand-granted, or manually blocked access. */
+  manualOverride?: boolean;
+  /** Human-readable provenance for an intentional override, when exported. */
+  overrideReason?: string | null;
   looksInternal: boolean;
   looksFreePlan: boolean;
 }
@@ -143,6 +149,7 @@ export interface MatchResult {
 
 export type IssueCategory = "A" | "B" | "C" | "D" | "E";
 export type Severity = "high" | "medium" | "low";
+export type ReconciliationDirection = "grant" | "revoke";
 
 export const CATEGORY_LABELS: Record<IssueCategory, string> = {
   A: "Unpaid but active",
@@ -165,6 +172,12 @@ export interface Issue {
   stripeStatus: string | null;
   appStatus: string | null;
   plan: string | null;
+  /** Direction an eventual reconciler would move access, if applicable. */
+  reconciliationDirection?: ReconciliationDirection | null;
+  /** Whether the app export explicitly marks this account as a human exception. */
+  manualOverride?: boolean;
+  /** Optional override provenance supplied by the app export. */
+  overrideReason?: string | null;
   /** estimated monthly $ value for leakage math (category A only) */
   estimatedMonthlyValue: number | null;
   matchTier: MatchTier | null;
