@@ -53,10 +53,13 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
   const actions: string[] = [];
   if (summary.unpaidActiveCount > 0) {
     actions.push(
-      `Review the ${summary.unpaidActiveCount} account(s) that appear unpaid in Stripe but still active in your app.`,
+      `Review the ${summary.unpaidActiveCount} revoke-direction account(s) that appear unpaid in Stripe but still active in your app.`,
     );
     actions.push(
-      "Check for manual admin/support overrides and app-side changes outside the webhook handler.",
+      "Do not revoke from one observation alone. Require several consecutive agreeing reconciliation runs, then send exceptions to a review queue.",
+    );
+    actions.push(
+      "Check for explicit manual admin/support overrides and app-side changes outside the webhook handler.",
     );
     actions.push(
       "Look for migrations, backfills, or manual plan changes that may have desynced access state.",
@@ -70,15 +73,15 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
   }
   if (summary.paidBlockedCount > 0) {
     actions.push(
-      `Investigate the ${summary.paidBlockedCount} paying customer(s) your app marks as blocked or inactive.`,
+      `Investigate the ${summary.paidBlockedCount} grant-direction paying customer(s) your app marks as blocked or inactive.`,
     );
     actions.push(
-      "Prioritize these — paying customers are likely to notice before your team does.",
+      "Prioritize grant-direction drift: restoring verified paid access is the safer direction to automate or fast-track.",
     );
   }
   if (summary.missingBillingLinkCount > 0) {
     actions.push(
-      `Confirm whether the ${summary.missingBillingLinkCount} active account(s) without a billing reference are intentionally comped.`,
+      `Confirm whether the ${summary.missingBillingLinkCount} active account(s) without a billing reference are intentionally comped. Export an explicit manual-override flag and reason for intentional exceptions.`,
     );
   }
   if (summary.orphanedStripeCount > 0) {
@@ -88,7 +91,7 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
   }
   if (summary.ambiguousCount > 0) {
     actions.push(
-      `Manually review the ${summary.ambiguousCount} ambiguous case(s) the audit could not classify with confidence.`,
+      `Manually review the ${summary.ambiguousCount} ambiguous or explicitly overridden case(s) the audit could not classify as ordinary drift.`,
     );
   }
   if (actions.length === 0) {
@@ -97,7 +100,7 @@ export function buildRecommendedActions(summary: AuditSummary): string[] {
     );
   } else {
     actions.push(
-      "After the first access incident, a one-time audit often stops feeling sufficient. Consider recurring reconciliation — drift recurs with deploys, overrides, and failed writes.",
+      "For recurring monitoring, retain every observation and graph mismatch rate over time. Healing should not erase the signal that a webhook or access path is degrading.",
     );
   }
   return actions;
@@ -112,11 +115,14 @@ export const SQL_CHECKS: { title: string; sql: string }[] = [
   {
     title: "Unpaid in Stripe but active in your app",
     sql: `-- Adapt table/column names to your schema. Minimal fields only — no emails.
+-- Exclude explicit manual overrides before taking action.
 SELECT u.id AS internal_user_id, u.stripe_customer_id, u.plan, u.access_enabled
 FROM users u
 JOIN stripe_subscriptions s ON s.customer_id = u.stripe_customer_id
 WHERE s.status IN ('canceled', 'unpaid', 'past_due', 'incomplete_expired')
-  AND u.access_enabled = true;`,
+  AND u.access_enabled = true;
+-- If your schema stores explicit exceptions, also add:
+-- AND COALESCE(u.manual_access_override, false) = false;`,
   },
   {
     title: "Paid in Stripe but blocked in your app",
@@ -124,7 +130,9 @@ WHERE s.status IN ('canceled', 'unpaid', 'past_due', 'incomplete_expired')
 FROM users u
 JOIN stripe_subscriptions s ON s.customer_id = u.stripe_customer_id
 WHERE s.status IN ('active', 'trialing')
-  AND (u.access_enabled = false OR u.status IN ('blocked', 'inactive', 'disabled'));`,
+  AND (u.access_enabled = false OR u.status IN ('blocked', 'inactive', 'disabled'));
+-- If your schema stores explicit exceptions, also add:
+-- AND COALESCE(u.manual_access_override, false) = false;`,
   },
   {
     title: "Active users with no billing reference",
