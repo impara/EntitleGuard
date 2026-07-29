@@ -128,6 +128,33 @@ const APP_HEURISTICS: Record<AppField, FieldHeuristic> = {
     exact: ["role", "account type", "account_type", "user type", "user_type"],
     fuzzy: ["role", "type"],
   },
+  manualOverride: {
+    exact: [
+      "manual override",
+      "manual_override",
+      "manual access override",
+      "manual_access_override",
+      "access override",
+      "access_override",
+      "is_comped",
+      "comped",
+    ],
+    fuzzy: ["manual_override", "access_override", "comped"],
+    valueTest: (vs) => ratio(vs, (v) => BOOLEAN_VALUES.has(v.toLowerCase())),
+  },
+  overrideReason: {
+    exact: [
+      "override reason",
+      "override_reason",
+      "manual override reason",
+      "manual_override_reason",
+      "access override reason",
+      "access_override_reason",
+      "comp reason",
+      "comp_reason",
+    ],
+    fuzzy: ["override_reason", "override reason", "comp_reason"],
+  },
   createdAt: {
     exact: ["created at", "created_at", "created", "signup date", "signup_date"],
     fuzzy: ["created"],
@@ -230,6 +257,8 @@ export function detectAppMapping(csv: ParsedCsv): {
     "status",
     "plan",
     "role",
+    "manualOverride",
+    "overrideReason",
     "createdAt",
     "lastActiveAt",
   ]);
