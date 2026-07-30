@@ -11,7 +11,7 @@ import {
   type DatabaseClient,
 } from "../../../db";
 import { ingestMonitoringRun } from "../ingest-run";
-import type { MonitoringFindingInput } from "../types";
+import type { IngestMonitoringRunInput, MonitoringFindingInput } from "../types";
 
 function fingerprint(character: string): string {
   return character.repeat(64);
@@ -70,7 +70,7 @@ describe("monitoring run ingestion", () => {
     expect(first.alerts.active).toHaveLength(1);
     expect(first.alerts.active[0]).toMatchObject({ type: "paid_blocked", occurrenceCount: 1 });
 
-    const secondInput = {
+    const secondInput: IngestMonitoringRunInput = {
       jobId,
       idempotencyKey: "run-2",
       startedAt: "2026-07-02T00:00:00.000Z",
@@ -78,7 +78,7 @@ describe("monitoring run ingestion", () => {
       totalAppRecords: 10,
       totalStripeRecords: 10,
       findings: [finding("a", "B")],
-    } as const;
+    };
     const second = ingestMonitoringRun(secondInput, database);
 
     expect(second.findings).toMatchObject({ created: 0, recurring: 1, reopened: 0, resolved: 0 });
