@@ -46,6 +46,73 @@ function createDb() {
       props TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS monitoring_jobs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      schedule TEXT NOT NULL DEFAULT 'nightly',
+      status TEXT NOT NULL DEFAULT 'active',
+      paid_blocked_threshold INTEGER NOT NULL DEFAULT 1,
+      drift_rate_increase_bps INTEGER NOT NULL DEFAULT 100,
+      queue_age_threshold_hours INTEGER NOT NULL DEFAULT 168,
+      reference_age_days INTEGER NOT NULL DEFAULT 28,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS monitoring_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      status TEXT NOT NULL DEFAULT 'completed',
+      started_at TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      total_app_records INTEGER NOT NULL,
+      total_stripe_records INTEGER NOT NULL,
+      mismatch_count INTEGER NOT NULL,
+      paid_blocked_count INTEGER NOT NULL,
+      unpaid_active_count INTEGER NOT NULL,
+      mismatch_rate_bps INTEGER NOT NULL,
+      reference_run_id INTEGER,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS monitoring_findings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      fingerprint TEXT NOT NULL,
+      category TEXT NOT NULL,
+      direction TEXT,
+      severity TEXT NOT NULL,
+      first_seen_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      resolved_at TEXT,
+      manual_override INTEGER NOT NULL DEFAULT 0,
+      override_actor TEXT,
+      override_reason TEXT,
+      override_expires_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS monitoring_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      run_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      dedupe_key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      details TEXT NOT NULL,
+      acknowledged_by TEXT,
+      acknowledged_at TEXT,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_findings_job_fingerprint_idx
+      ON monitoring_findings(job_id, fingerprint);
+    CREATE INDEX IF NOT EXISTS monitoring_findings_open_age_idx
+      ON monitoring_findings(job_id, resolved_at, first_seen_at);
+    CREATE INDEX IF NOT EXISTS monitoring_runs_job_completed_idx
+      ON monitoring_runs(job_id, completed_at);
+    CREATE INDEX IF NOT EXISTS monitoring_alerts_job_status_idx
+      ON monitoring_alerts(job_id, status, created_at);
   `);
   return drizzle(sqlite, { schema });
 }
