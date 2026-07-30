@@ -32,6 +32,7 @@ const runSchema = z
     jobId: z.number().int().positive(),
     idempotencyKey: z.string().trim().min(1).max(128),
     source: z.enum(["manual", "api", "scheduled"]).optional(),
+    completeSnapshot: z.literal(true),
     startedAt: timestampSchema,
     completedAt: timestampSchema,
     totalAppRecords: z.number().int().nonnegative(),
