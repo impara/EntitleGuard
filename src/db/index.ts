@@ -7,11 +7,26 @@ import * as schema from "./schema";
 const DATA_DIR = path.join(process.cwd(), ".data");
 const DB_PATH = process.env.ENTITLEGUARD_DB_PATH ?? path.join(DATA_DIR, "entitleguard.db");
 
-function createDb() {
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  const sqlite = new Database(DB_PATH);
+function ensureColumn(
+  sqlite: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const columns = sqlite.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
+  if (!columns.some((candidate) => candidate.name === column)) {
+    sqlite.exec(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${definition}`);
+  }
+}
+
+/**
+ * Initialize an existing SQLite handle. Exported so integration tests can use
+ * an isolated in-memory database without touching the application singleton.
+ */
+export function initializeDatabase(sqlite: Database.Database) {
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("busy_timeout = 5000");
+  sqlite.pragma("foreign_keys = ON");
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,12 +70,14 @@ function createDb() {
       drift_rate_increase_bps INTEGER NOT NULL DEFAULT 100,
       queue_age_threshold_hours INTEGER NOT NULL DEFAULT 168,
       reference_age_days INTEGER NOT NULL DEFAULT 28,
+      reference_tolerance_days INTEGER NOT NULL DEFAULT 7,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS monitoring_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       job_id INTEGER NOT NULL,
+      ingest_key TEXT,
       source TEXT NOT NULL DEFAULT 'manual',
       status TEXT NOT NULL DEFAULT 'completed',
       started_at TEXT NOT NULL,
@@ -83,45 +100,91 @@ function createDb() {
       severity TEXT NOT NULL,
       first_seen_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL,
+      first_seen_run_id INTEGER,
+      last_seen_run_id INTEGER,
       resolved_at TEXT,
+      resolved_run_id INTEGER,
       manual_override INTEGER NOT NULL DEFAULT 0,
       override_actor TEXT,
       override_reason TEXT,
       override_expires_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS monitoring_finding_observations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL,
+      finding_id INTEGER NOT NULL,
+      observed_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS monitoring_alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       job_id INTEGER NOT NULL,
       run_id INTEGER NOT NULL,
+      last_run_id INTEGER,
+      resolved_run_id INTEGER,
       type TEXT NOT NULL,
       severity TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'open',
       dedupe_key TEXT NOT NULL,
       title TEXT NOT NULL,
       details TEXT NOT NULL,
+      occurrence_count INTEGER NOT NULL DEFAULT 1,
+      first_triggered_at TEXT,
+      last_triggered_at TEXT,
       acknowledged_by TEXT,
       acknowledged_at TEXT,
       resolved_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+  `);
+
+  // Forward-only compatibility for databases created by an earlier beta branch.
+  ensureColumn(sqlite, "monitoring_jobs", "reference_tolerance_days", "INTEGER NOT NULL DEFAULT 7");
+  ensureColumn(sqlite, "monitoring_runs", "ingest_key", "TEXT");
+  ensureColumn(sqlite, "monitoring_findings", "first_seen_run_id", "INTEGER");
+  ensureColumn(sqlite, "monitoring_findings", "last_seen_run_id", "INTEGER");
+  ensureColumn(sqlite, "monitoring_findings", "resolved_run_id", "INTEGER");
+  ensureColumn(sqlite, "monitoring_alerts", "last_run_id", "INTEGER");
+  ensureColumn(sqlite, "monitoring_alerts", "resolved_run_id", "INTEGER");
+  ensureColumn(sqlite, "monitoring_alerts", "occurrence_count", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(sqlite, "monitoring_alerts", "first_triggered_at", "TEXT");
+  ensureColumn(sqlite, "monitoring_alerts", "last_triggered_at", "TEXT");
+
+  sqlite.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_runs_job_ingest_key_idx
+      ON monitoring_runs(job_id, ingest_key);
     CREATE UNIQUE INDEX IF NOT EXISTS monitoring_findings_job_fingerprint_idx
       ON monitoring_findings(job_id, fingerprint);
     CREATE INDEX IF NOT EXISTS monitoring_findings_open_age_idx
       ON monitoring_findings(job_id, resolved_at, first_seen_at);
     CREATE INDEX IF NOT EXISTS monitoring_runs_job_completed_idx
       ON monitoring_runs(job_id, completed_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_finding_observations_run_finding_idx
+      ON monitoring_finding_observations(run_id, finding_id);
+    CREATE INDEX IF NOT EXISTS monitoring_finding_observations_finding_idx
+      ON monitoring_finding_observations(finding_id, observed_at);
     CREATE INDEX IF NOT EXISTS monitoring_alerts_job_status_idx
       ON monitoring_alerts(job_id, status, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_alerts_active_dedupe_idx
+      ON monitoring_alerts(job_id, dedupe_key)
+      WHERE status IN ('open', 'acknowledged');
   `);
+
   return drizzle(sqlite, { schema });
 }
 
-declare global {
-  var __entitleguardDb: ReturnType<typeof createDb> | undefined;
+export type DatabaseClient = ReturnType<typeof initializeDatabase>;
+
+function createDb(): DatabaseClient {
+  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  return initializeDatabase(new Database(DB_PATH));
 }
 
-function getDb() {
+declare global {
+  var __entitleguardDb: DatabaseClient | undefined;
+}
+
+function getDb(): DatabaseClient {
   if (!globalThis.__entitleguardDb) {
     globalThis.__entitleguardDb = createDb();
   }
@@ -134,7 +197,7 @@ function getDb() {
  * parallel workers, and eager `CREATE TABLE` calls raced on the same file
  * (SQLITE_BUSY: "database is locked" during "Collecting page data").
  */
-export const db = new Proxy({} as ReturnType<typeof createDb>, {
+export const db = new Proxy({} as DatabaseClient, {
   get(_target, prop) {
     const real = getDb();
     const value = Reflect.get(real, prop, real);
