@@ -1,58 +1,65 @@
-# EntitleGuard Audit
+# EntitleGuard
 
-Local-first **Stripe-to-app-access reconciliation auditor for usage-heavy B2B SaaS**. Read-only by design: it finds mismatches and produces a reconciliation report; it never patches, suspends, or writes anything.
+**Know when a paying customer loses access before support tells you.**
 
-Upload a Stripe export CSV and an app entitlement export CSV. The tool compares them **entirely in the browser** and reports potential entitlement drift: unpaid-but-active users, paid-but-blocked customers, missing billing links, orphaned subscriptions, ambiguous cases, and explicitly marked manual overrides — with estimated monthly exposure.
+EntitleGuard is a read-only Stripe-to-app-access auditor for SaaS teams that keep entitlement state in their own database. It compares Stripe billing state with the access state the application actually uses and reports paid-but-blocked customers, unpaid-but-active accounts, missing billing links, orphaned subscriptions, ambiguous states, and explicit manual overrides.
 
-**Initial focus:** Stripe + Postgres-style CSV exports (users or workspaces table). Nightly API-based reconciliation is in beta.
+The current public product is a **free one-time local audit**: upload a Stripe export CSV and an app entitlement export CSV, and the comparison runs entirely in the browser. The monitoring beta is under active development.
 
 **Live app:** [entitleguard.amertech.online](https://entitleguard.amertech.online) · [Example report](https://entitleguard.amertech.online/audit?demo=1)
 
 ![EntitleGuard demo report](public/entitleguard-demo-report.png)
+
+## Monitoring beta direction
+
+The beta is centered on operational alerts rather than a dashboard people may forget to inspect:
+
+- **Critical access alert:** page when `paid-but-blocked >= 1`.
+- **Drift alert:** compare the current mismatch rate with one fixed historical reference run, normally the same weekday about four weeks earlier. Do not use a rolling mean that can silently absorb a slow degradation.
+- **Queue-age alert:** warn when unresolved mismatches remain open beyond the configured age threshold.
+- **Acknowledgement and history:** alerts must be owned, acknowledged, and preserved rather than merely displayed.
+- **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
+- **Read-only by default:** no automatic access grant or revocation.
+
+The first implementation milestone adds the monitoring domain model, persistent jobs/runs/findings/alerts, fixed-reference selection, and alert evaluation. Run ingestion, operator UI, scheduling, and email delivery follow in later milestones.
 
 ## Who this is not for
 
 EntitleGuard is intentionally narrow. It is probably not useful for:
 
 - Apps that check Stripe live on every request and do not keep local entitlement state.
-- Very early SaaS products with a handful of customers and no meaningful usage cost.
+- Very early SaaS products with a handful of customers and no meaningful support or usage cost.
 - Teams looking for a webhook retry queue, dead-letter replay tool, or automatic suspension system.
-- Companies that need vendor-hosted procurement, SOC 2 review, or enterprise SSO before running any audit.
+- Large engineering teams that prefer to build and maintain a custom reconciler around deeply bespoke entitlement rules.
+- Companies that require enterprise procurement, SOC 2 review, or enterprise SSO before a beta trial.
+
+The likely buyer is a team where paid-but-blocked incidents already enter a support queue and consume engineering or support time, but nobody wants to own the monitoring job permanently.
 
 ## What this is not
 
 EntitleGuard is **not a webhook retry tool**.
 
-Webhook queues, idempotency, replay, and backfills help ensure events are processed. EntitleGuard checks the **result**: does your **current** app access state actually agree with Stripe's **current** billing state?
+Webhook queues, idempotency, replay, and backfills help ensure events are processed. EntitleGuard checks the result: does the application's **current access state** agree with Stripe's **current billing state**?
 
-It catches cases where the webhook returned 200, but the DB row never ended up reflecting the correct state — failed writes, rollbacks, manual CS overrides, migrations, or later internal changes. It also catches drift that lazy "sync on page view" never heals, because the user never opens the billing page but keeps hitting your API.
+It catches cases where a webhook returned 200 but the database never ended up reflecting the correct state: failed writes, rollbacks, wrong-row updates, migrations, manual changes, or later internal overwrites.
 
-This is **final-state reconciliation**, not webhook observability.
-
-## Two layers
-
-Mature Stripe integrations usually need both:
-
-1. **Webhook reliability** — did we receive and process the Stripe event correctly? Queues, idempotency, and replay help here.
-2. **Final-state reconciliation** — does your **current** app access state agree with Stripe's **current** billing state? EntitleGuard checks this result, regardless of how you got there.
-
-Lazy sync on page view only heals accounts that open the billing page again. It does not catch users who keep hitting your API while Stripe says canceled, manual CS/admin overrides, or acknowledged-but-not-reflected cases where the webhook returned 200 but the access row never updated.
+This is final-state reconciliation used as an access-reliability signal.
 
 ## Direction-aware reconciliation policy
 
 Grant and revoke mismatches do not have the same blast radius:
 
-- **Grant direction** — Stripe says paid/active while the app blocks access. After identity and billing state are verified, restoring paid access is the safer direction to fast-track or automate.
-- **Revoke direction** — Stripe says canceled/unpaid while the app still grants access. Do not revoke from one observation. Require several consecutive agreeing runs and send exceptions to a review queue.
-- **Manual overrides** — comped, hand-granted, or manually blocked accounts should carry an explicit override flag and reason. The audit preserves these as review findings instead of treating them as ordinary leakage.
+- **Grant direction:** Stripe says paid/active while the app blocks access. A single verified case is urgent because a paying customer cannot use the product.
+- **Revoke direction:** Stripe says canceled/unpaid while the app still grants access. Do not revoke from one observation. Require repeated agreement and human review.
+- **Manual overrides:** comped, hand-granted, or manually blocked accounts should carry an explicit override flag and provenance instead of being repeatedly treated as unexplained drift.
 
-For recurring monitoring, retain every observation and trend mismatch rate over time. A healing job should record the mismatch before correcting it; otherwise the system hides the signal that a webhook or access path is degrading.
+Monitoring must retain every observation. Silent healing without history hides the fact that an access path is degrading.
 
 ## Minimal export SQL
 
-The recommended app export contains only pseudonymous IDs, statuses, and plans — no names or emails. Adapt table/column names to your schema.
+The recommended app export contains only pseudonymous IDs, statuses, and plans. Adapt table and column names to your schema.
 
-**Users table** (per-user billing):
+**Users table:**
 
 ```sql
 SELECT
@@ -64,7 +71,7 @@ SELECT
 FROM users;
 ```
 
-**Workspaces table** (team/org billing):
+**Workspaces table:**
 
 ```sql
 SELECT
@@ -76,102 +83,88 @@ SELECT
 FROM workspaces;
 ```
 
-Export the columns your **request path actually reads** for access decisions. If middleware checks a boolean and a cron checks a status column, include both — the audit flags rows where your own columns disagree.
+Export the columns the request path actually reads for access decisions. If middleware checks a boolean while another process checks a status column, include both so internal contradictions can be detected.
 
-If intentional exceptions exist, also export optional columns using recognizable headers such as:
+For intentional exceptions, also export recognizable optional columns such as:
 
 ```sql
 manual_access_override,
 manual_override_reason
 ```
 
-Accepted override flag values include `true`/`false`, `1`/`0`, and `yes`/`no`. A reason is strongly recommended so the exception has durable provenance.
-
-## What's next after the free audit
-
-The free CSV audit is a one-time reconciliation. If you find drift, the next step is keeping it from coming back:
-
-- **Monitoring beta** ($79/month, planned):
-  - Nightly Stripe ↔ app diff
-  - Mismatch history and rate trends, so healing never hides a degrading path
-  - Direction-aware handling: grant candidates prioritized; revoke candidates require repeated agreement
-  - Explicit manual-override preservation and human review queue
-  - Slack/email alerts
-  - Read-only by default — never auto-fix by default
-  - Many teams only want continuous checks after their first incident
-- **Manual leak audit** ($150): human review of your findings — free if we find nothing
-- **15-minute drift review**: quick call to interpret results and plan remediation
-
-Join via the CTAs on the [audit results page](https://entitleguard.amertech.online/audit).
+Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 
 ## Privacy model
 
-- CSV files are parsed and reconciled client-side (Web Worker). They are never sent to our servers.
-- Minimal export by design: the copy-paste SQL exports only internal ID, Stripe customer ID, status, plan, and access flag — no names or emails. Email is an optional fallback join key for databases that don't store `stripe_customer_id`.
-- No Stripe API keys, no database credentials, no login.
-- The server only ever receives: analytics events (scalar props), and — after explicit consent — contact details plus an aggregate audit summary (counts and bucketed exposure, no identifiers).
-- Local-only processing removes vendor exposure, but exporting customer records remains the user's own GDPR/data-policy responsibility — the UI states this explicitly.
+### Free local audit
+
+- CSV files are parsed and reconciled client-side in a Web Worker.
+- Files are never sent to the EntitleGuard server.
+- No Stripe API keys, database credentials, or login are required.
+- The server receives analytics scalars and, only after explicit consent, contact details plus an aggregate audit summary.
+
+### Monitoring beta
+
+- The monitoring data path will be explicit and read-only.
+- Findings are designed to use stable pseudonymous fingerprints rather than raw customer or user identifiers.
+- Raw CSV rows are not part of the server-side monitoring schema.
+- A design partner may still need a small adapter because entitlement truth lives in the customer's own schema; minimizing that integration burden is a core beta constraint.
 
 ## Stack
 
-- Next.js (App Router) + TypeScript + Tailwind CSS v4
+- Next.js App Router, TypeScript, React, and Tailwind CSS v4
 - PapaParse for CSV parsing
-- Pure-TypeScript reconciliation engine (`src/lib/engine`) — framework-free, unit-tested
-- SQLite (better-sqlite3 + Drizzle) for lead capture and analytics
-- Vitest for engine tests
+- Pure-TypeScript reconciliation engine in `src/lib/engine`
+- Monitoring alert logic in `src/lib/monitoring`
+- SQLite with better-sqlite3 and Drizzle
+- Vitest
 
 ## Getting started
-
-No setup required — [run the free audit in your browser](https://entitleguard.amertech.online/audit).
-
-To run locally:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Use **See example report** for a demo with bundled sample data (`public/samples/`).
+Open `http://localhost:3000`. Use **See example report** for bundled sample data in `public/samples/`.
 
 ## Scripts
 
-| Command             | Purpose                          |
-| ------------------- | -------------------------------- |
-| `npm run dev`       | Development server               |
-| `npm run build`     | Production build                 |
-| `npm test`          | Engine unit + integration tests  |
-| `npm run lint`      | ESLint                           |
-| `npm run typecheck` | TypeScript check                 |
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm test` | Unit and integration tests |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript check |
 
-## Deploy (Coolify / Docker)
+## Deploy with Coolify or Docker
 
-The repo ships a multi-stage `Dockerfile` (Next.js standalone output, ~minimal Alpine runtime) and a `docker-compose.yml` ready for Coolify:
+The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 
-1. In Coolify, add a new resource → **Docker Compose** pointing at this repo.
-2. Coolify picks up the `SERVICE_FQDN_ENTITLEGUARD_3000` magic variable and auto-assigns a subdomain from your wildcard domain (Cloudflare wildcard → Coolify proxy handles TLS and routing). Override the generated FQDN in the service settings if you want e.g. `entitleguard.yourdomain.com`.
-3. The named volume `entitleguard-data` persists the SQLite database (`/data/entitleguard.db` — leads, audit summaries, analytics) across deploys.
+1. In Coolify, add a Docker Compose resource pointing at this repository.
+2. Configure the generated FQDN or override it with the intended domain.
+3. Keep the `entitleguard-data` named volume mounted so the SQLite database at `/data/entitleguard.db` persists across deploys.
 
-### Admin page
-
-A read-only dashboard at `/admin` lists captured leads (with their aggregate
-audit summaries), the analytics event funnel, and landing traffic sources.
-It is protected by HTTP Basic auth: set the `ADMIN_PASSWORD` environment
-variable (in Coolify: service → Environment Variables) and log in as user
-`admin`. If `ADMIN_PASSWORD` is not set, `/admin` returns 404.
-
-To run it anywhere else:
+Run elsewhere with:
 
 ```bash
 docker compose up -d --build
 ```
 
-The container listens on port 3000 (not published to the host by default — Coolify's proxy attaches over the Docker network).
+The container listens on port 3000.
+
+## Admin page
+
+The read-only `/admin` dashboard lists captured leads, aggregate audit summaries, analytics funnel events, and landing traffic sources. It is protected by HTTP Basic authentication through `ADMIN_PASSWORD`. If the variable is unset, `/admin` returns 404.
 
 ## Project layout
 
-- `src/lib/engine/` — CSV parsing, column auto-detection, status normalization, tiered matching, category A–E classification, leakage estimation, masking
+- `src/lib/engine/` — parsing, mapping, normalization, matching, classification, leakage estimation, masking
+- `src/lib/monitoring/` — fixed-reference selection and alert evaluation
 - `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
-- `src/workers/reconcile.worker.ts` — runs the engine off the main thread
-- `src/components/audit/` — upload → mapping → run → results wizard
-- `src/app/api/leads`, `src/app/api/events` — zod-validated lead capture and analytics (SQLite at `.data/entitleguard.db`)
+- `src/workers/reconcile.worker.ts` — browser-side reconciliation worker
+- `src/components/audit/` — upload, mapping, run, and results flow
+- `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, and alerts
+- `src/app/api/leads`, `src/app/api/events` — validated lead capture and analytics
 - `public/samples/` — demo CSVs with pre-seeded drift
