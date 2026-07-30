@@ -50,7 +50,7 @@ export interface EvaluateMonitoringAlertsInput {
 
 /**
  * A caller must hash or HMAC its own stable entitlement identity before
- * ingestion. Raw emails, Stripe IDs, user IDs, and CSV rows are not accepted.
+ * ingestion. Raw customer emails, Stripe IDs, user IDs, and CSV rows are not accepted.
  */
 export interface MonitoringFindingInput {
   fingerprint: string;
@@ -67,6 +67,8 @@ export interface IngestMonitoringRunInput {
   jobId: number;
   idempotencyKey: string;
   source?: "manual" | "api" | "scheduled";
+  /** Required because absence is interpreted as resolution. Partial snapshots are unsafe. */
+  completeSnapshot: true;
   startedAt: string;
   completedAt: string;
   totalAppRecords: number;
