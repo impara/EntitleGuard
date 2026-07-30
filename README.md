@@ -27,13 +27,14 @@ The current implementation includes the monitoring domain model, persistent jobs
 
 `POST /api/monitoring/runs` persists one completed run. The endpoint is disabled unless `MONITORING_INGEST_TOKEN` is configured and requires `Authorization: Bearer <token>`.
 
-A monitoring job must already exist in `monitoring_jobs`. Each request supplies a caller-generated idempotency key and stable 64-character SHA-256 or HMAC fingerprints. Raw emails, Stripe customer IDs, internal user IDs, and CSV rows are rejected by the strict payload schema.
+A monitoring job must already exist in `monitoring_jobs`. Each request supplies a caller-generated idempotency key and stable 64-character SHA-256 or HMAC fingerprints; keyed HMAC fingerprints are preferred. Raw customer emails, Stripe customer IDs, internal user IDs, and CSV rows are rejected by the strict payload schema.
 
 ```json
 {
   "jobId": 1,
   "idempotencyKey": "2026-08-01-nightly",
   "source": "scheduled",
+  "completeSnapshot": true,
   "startedAt": "2026-08-01T00:00:00.000Z",
   "completedAt": "2026-08-01T00:00:12.000Z",
   "totalAppRecords": 500,
@@ -51,6 +52,7 @@ A monitoring job must already exist in `monitoring_jobs`. Each request supplies 
 
 Ingestion is atomic and implements these lifecycle rules:
 
+- `completeSnapshot: true` is mandatory because an absent fingerprint is interpreted as a resolved finding; partial snapshots are rejected.
 - Repeated idempotency keys do not create duplicate runs or observations.
 - A recurring finding updates `last_seen_at`; a resolved finding that reappears starts a new incident age.
 - Findings absent from the latest run are resolved while immutable per-run observations remain available.
