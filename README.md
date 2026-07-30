@@ -21,7 +21,42 @@ The beta is centered on operational alerts rather than a dashboard people may fo
 - **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
 - **Read-only by default:** no automatic access grant or revocation.
 
-The first implementation milestone adds the monitoring domain model, persistent jobs/runs/findings/alerts, fixed-reference selection, and alert evaluation. Run ingestion, operator UI, scheduling, and email delivery follow in later milestones.
+The current implementation includes the monitoring domain model, persistent jobs and runs, finding observations and lifecycle, fixed-reference selection, alert evaluation, authenticated run ingestion, and active-alert deduplication. Operator UI, scheduling, acknowledgement endpoints, and email delivery remain later milestones.
+
+## Monitoring run ingestion
+
+`POST /api/monitoring/runs` persists one completed run. The endpoint is disabled unless `MONITORING_INGEST_TOKEN` is configured and requires `Authorization: Bearer <token>`.
+
+A monitoring job must already exist in `monitoring_jobs`. Each request supplies a caller-generated idempotency key and stable 64-character SHA-256 or HMAC fingerprints. Raw emails, Stripe customer IDs, internal user IDs, and CSV rows are rejected by the strict payload schema.
+
+```json
+{
+  "jobId": 1,
+  "idempotencyKey": "2026-08-01-nightly",
+  "source": "scheduled",
+  "startedAt": "2026-08-01T00:00:00.000Z",
+  "completedAt": "2026-08-01T00:00:12.000Z",
+  "totalAppRecords": 500,
+  "totalStripeRecords": 498,
+  "findings": [
+    {
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "category": "B",
+      "direction": "grant",
+      "severity": "high"
+    }
+  ]
+}
+```
+
+Ingestion is atomic and implements these lifecycle rules:
+
+- Repeated idempotency keys do not create duplicate runs or observations.
+- A recurring finding updates `last_seen_at`; a resolved finding that reappears starts a new incident age.
+- Findings absent from the latest run are resolved while immutable per-run observations remain available.
+- Active manual overrides are preserved but excluded from actionable mismatch rate and queue age until they expire.
+- Repeated alert triggers update one active incident and increment its occurrence count.
+- When a condition clears, the active alert is resolved; a later recurrence opens a new incident.
 
 ## Who this is not for
 
@@ -105,8 +140,8 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 
 ### Monitoring beta
 
-- The monitoring data path will be explicit and read-only.
-- Findings are designed to use stable pseudonymous fingerprints rather than raw customer or user identifiers.
+- The monitoring data path is explicit and read-only.
+- Findings use stable pseudonymous fingerprints rather than raw customer or user identifiers.
 - Raw CSV rows are not part of the server-side monitoring schema.
 - A design partner may still need a small adapter because entitlement truth lives in the customer's own schema; minimizing that integration burden is a core beta constraint.
 
@@ -115,7 +150,7 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - Next.js App Router, TypeScript, React, and Tailwind CSS v4
 - PapaParse for CSV parsing
 - Pure-TypeScript reconciliation engine in `src/lib/engine`
-- Monitoring alert logic in `src/lib/monitoring`
+- Monitoring ingestion and alert logic in `src/lib/monitoring`
 - SQLite with better-sqlite3 and Drizzle
 - Vitest
 
@@ -145,6 +180,7 @@ The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 1. In Coolify, add a Docker Compose resource pointing at this repository.
 2. Configure the generated FQDN or override it with the intended domain.
 3. Keep the `entitleguard-data` named volume mounted so the SQLite database at `/data/entitleguard.db` persists across deploys.
+4. Set `MONITORING_INGEST_TOKEN` only when the private monitoring ingestion endpoint should be enabled.
 
 Run elsewhere with:
 
@@ -161,10 +197,11 @@ The read-only `/admin` dashboard lists captured leads, aggregate audit summaries
 ## Project layout
 
 - `src/lib/engine/` — parsing, mapping, normalization, matching, classification, leakage estimation, masking
-- `src/lib/monitoring/` — fixed-reference selection and alert evaluation
+- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, and alert evaluation
 - `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
 - `src/workers/reconcile.worker.ts` — browser-side reconciliation worker
 - `src/components/audit/` — upload, mapping, run, and results flow
-- `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, and alerts
+- `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, observations, and alerts
+- `src/app/api/monitoring/runs` — authenticated, strict, pseudonymous run-ingestion endpoint
 - `src/app/api/leads`, `src/app/api/events` — validated lead capture and analytics
 - `public/samples/` — demo CSVs with pre-seeded drift
