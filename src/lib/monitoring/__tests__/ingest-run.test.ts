@@ -55,6 +55,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "run-1",
+        completeSnapshot: true,
         startedAt: "2026-07-01T00:00:00.000Z",
         completedAt: "2026-07-01T00:01:00.000Z",
         totalAppRecords: 10,
@@ -73,6 +74,7 @@ describe("monitoring run ingestion", () => {
     const secondInput: IngestMonitoringRunInput = {
       jobId,
       idempotencyKey: "run-2",
+      completeSnapshot: true,
       startedAt: "2026-07-02T00:00:00.000Z",
       completedAt: "2026-07-02T00:01:00.000Z",
       totalAppRecords: 10,
@@ -96,6 +98,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "run-3",
+        completeSnapshot: true,
         startedAt: "2026-07-03T00:00:00.000Z",
         completedAt: "2026-07-03T00:01:00.000Z",
         totalAppRecords: 10,
@@ -116,6 +119,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "run-4",
+        completeSnapshot: true,
         startedAt: "2026-07-04T00:00:00.000Z",
         completedAt: "2026-07-04T00:01:00.000Z",
         totalAppRecords: 10,
@@ -142,6 +146,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "baseline",
+        completeSnapshot: true,
         startedAt: "2026-06-03T00:00:00.000Z",
         completedAt: "2026-06-03T00:01:00.000Z",
         totalAppRecords: 100,
@@ -155,6 +160,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "current",
+        completeSnapshot: true,
         startedAt: "2026-07-01T00:00:00.000Z",
         completedAt: "2026-07-01T00:01:00.000Z",
         totalAppRecords: 100,
@@ -182,6 +188,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "override-1",
+        completeSnapshot: true,
         startedAt: "2026-05-01T00:00:00.000Z",
         completedAt: "2026-05-01T00:01:00.000Z",
         totalAppRecords: 10,
@@ -189,7 +196,7 @@ describe("monitoring run ingestion", () => {
         findings: [
           finding("b", "E", {
             manualOverride: true,
-            overrideActor: "support@example.invalid",
+            overrideActor: "support-agent-42",
             overrideReason: "Contractual access extension",
           }),
         ],
@@ -201,6 +208,7 @@ describe("monitoring run ingestion", () => {
       {
         jobId,
         idempotencyKey: "override-2",
+        completeSnapshot: true,
         startedAt: "2026-06-12T00:00:00.000Z",
         completedAt: "2026-06-12T00:01:00.000Z",
         totalAppRecords: 10,
@@ -208,7 +216,7 @@ describe("monitoring run ingestion", () => {
         findings: [
           finding("b", "E", {
             manualOverride: true,
-            overrideActor: "support@example.invalid",
+            overrideActor: "support-agent-42",
             overrideReason: "Contractual access extension",
           }),
         ],
