@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EntitleGuard — Stripe-to-app-access reconciliation auditor",
+  title: "EntitleGuard — know when a paying customer loses access",
   description:
-    "Local-first final-state reconciliation for usage-heavy B2B SaaS on Stripe. Compare Stripe billing state against your app access state — entirely in your browser. Not a webhook fixer. No API keys, no server upload.",
+    "Read-only Stripe access monitoring for SaaS teams. Detect paid-but-blocked customers before support reports them, track mismatch history, queue age, and override provenance. Run the free local audit without API keys or server uploads.",
   verification: {
     google: "O4-k04comryHYUDVjLLnEe23MjUNS8N5uizZ_y0e1bE",
   },
