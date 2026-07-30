@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 /**
  * Server-side storage (PRD section 13): lead data, consent timestamp,
  * aggregated result summaries, analytics events, and monitoring-beta state.
- * Raw CSV rows are never stored.
+ * Raw CSV rows and customer identifiers are never stored.
  */
 
 export const leads = sqliteTable("leads", {
@@ -59,6 +59,7 @@ export const monitoringJobs = sqliteTable("monitoring_jobs", {
   driftRateIncreaseBps: integer("drift_rate_increase_bps").notNull().default(100),
   queueAgeThresholdHours: integer("queue_age_threshold_hours").notNull().default(168),
   referenceAgeDays: integer("reference_age_days").notNull().default(28),
+  referenceToleranceDays: integer("reference_tolerance_days").notNull().default(7),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
@@ -70,12 +71,15 @@ export const monitoringJobs = sqliteTable("monitoring_jobs", {
 export const monitoringRuns = sqliteTable("monitoring_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   jobId: integer("job_id").notNull(),
+  /** Caller-supplied idempotency key, unique within a monitoring job. */
+  ingestKey: text("ingest_key"),
   source: text("source").notNull().default("manual"),
   status: text("status").notNull().default("completed"),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at").notNull(),
   totalAppRecords: integer("total_app_records").notNull(),
   totalStripeRecords: integer("total_stripe_records").notNull(),
+  /** Actionable findings only; explicit active manual overrides are excluded. */
   mismatchCount: integer("mismatch_count").notNull(),
   paidBlockedCount: integer("paid_blocked_count").notNull(),
   unpaidActiveCount: integer("unpaid_active_count").notNull(),
@@ -90,30 +94,53 @@ export const monitoringRuns = sqliteTable("monitoring_runs", {
 export const monitoringFindings = sqliteTable("monitoring_findings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   jobId: integer("job_id").notNull(),
-  /** Stable pseudonymous hash; never store a raw customer or user identifier. */
+  /** Stable pseudonymous HMAC/SHA-256; never store a raw customer or user identifier. */
   fingerprint: text("fingerprint").notNull(),
   category: text("category").notNull(),
   direction: text("direction"),
   severity: text("severity").notNull(),
+  /** Start of the current unresolved incident; reset when a resolved finding reappears. */
   firstSeenAt: text("first_seen_at").notNull(),
   lastSeenAt: text("last_seen_at").notNull(),
+  firstSeenRunId: integer("first_seen_run_id"),
+  lastSeenRunId: integer("last_seen_run_id"),
   resolvedAt: text("resolved_at"),
+  resolvedRunId: integer("resolved_run_id"),
   manualOverride: integer("manual_override", { mode: "boolean" }).notNull().default(false),
   overrideActor: text("override_actor"),
   overrideReason: text("override_reason"),
   overrideExpiresAt: text("override_expires_at"),
 });
 
+/** Immutable evidence that a finding was observed in a particular run. */
+export const monitoringFindingObservations = sqliteTable("monitoring_finding_observations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull(),
+  findingId: integer("finding_id").notNull(),
+  observedAt: text("observed_at").notNull(),
+});
+
+/**
+ * One row represents one alert incident. Repeated triggering runs update the
+ * active incident and increment occurrenceCount instead of creating noise.
+ */
 export const monitoringAlerts = sqliteTable("monitoring_alerts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   jobId: integer("job_id").notNull(),
+  /** First run that opened this incident. */
   runId: integer("run_id").notNull(),
+  lastRunId: integer("last_run_id"),
+  resolvedRunId: integer("resolved_run_id"),
   type: text("type").notNull(),
   severity: text("severity").notNull(),
   status: text("status").notNull().default("open"),
   dedupeKey: text("dedupe_key").notNull(),
   title: text("title").notNull(),
+  /** JSON-encoded MonitoringAlertCandidate. */
   details: text("details").notNull(),
+  occurrenceCount: integer("occurrence_count").notNull().default(1),
+  firstTriggeredAt: text("first_triggered_at"),
+  lastTriggeredAt: text("last_triggered_at"),
   acknowledgedBy: text("acknowledged_by"),
   acknowledgedAt: text("acknowledged_at"),
   resolvedAt: text("resolved_at"),
