@@ -1,5 +1,9 @@
 export type MonitoringAlertType = "paid_blocked" | "drift" | "queue_age";
 export type MonitoringAlertSeverity = "critical" | "warning";
+export type MonitoringAlertStatus = "open" | "acknowledged" | "resolved";
+export type MonitoringFindingCategory = "A" | "B" | "C" | "D" | "E";
+export type MonitoringFindingDirection = "grant" | "revoke";
+export type MonitoringFindingSeverity = "high" | "medium" | "low";
 
 export interface MonitoringRunSnapshot {
   id?: number | string;
@@ -42,4 +46,57 @@ export interface EvaluateMonitoringAlertsInput {
   oldestUnresolvedFirstSeenAt?: string | null;
   now?: string | Date;
   config?: Partial<MonitoringAlertConfig>;
+}
+
+/**
+ * A caller must hash or HMAC its own stable entitlement identity before
+ * ingestion. Raw emails, Stripe IDs, user IDs, and CSV rows are not accepted.
+ */
+export interface MonitoringFindingInput {
+  fingerprint: string;
+  category: MonitoringFindingCategory;
+  direction?: MonitoringFindingDirection | null;
+  severity: MonitoringFindingSeverity;
+  manualOverride?: boolean;
+  overrideActor?: string | null;
+  overrideReason?: string | null;
+  overrideExpiresAt?: string | null;
+}
+
+export interface IngestMonitoringRunInput {
+  jobId: number;
+  idempotencyKey: string;
+  source?: "manual" | "api" | "scheduled";
+  startedAt: string;
+  completedAt: string;
+  totalAppRecords: number;
+  totalStripeRecords: number;
+  findings: MonitoringFindingInput[];
+}
+
+export interface MonitoringAlertState {
+  id: number;
+  type: MonitoringAlertType;
+  severity: MonitoringAlertSeverity;
+  status: MonitoringAlertStatus;
+  occurrenceCount: number;
+}
+
+export interface IngestMonitoringRunResult {
+  runId: number;
+  idempotent: boolean;
+  referenceRunId: number | null;
+  findings: {
+    created: number;
+    recurring: number;
+    reopened: number;
+    resolved: number;
+    open: number;
+  };
+  alerts: {
+    created: number;
+    deduplicated: number;
+    resolved: number;
+    active: MonitoringAlertState[];
+  };
 }
