@@ -21,7 +21,7 @@ The beta is centered on operational alerts rather than a dashboard people may fo
 - **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
 - **Read-only by default:** no automatic access grant or revocation.
 
-The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, and aggregate operator read APIs. Operator UI, scheduling, acknowledgement endpoints, and email delivery remain later milestones.
+The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, aggregate operator read APIs, a retry-safe nightly scheduler, a customer-owned HTTPS source-adapter contract, and Resend email delivery. Operator UI and acknowledgement endpoints remain later milestones.
 
 ## Monitoring job bootstrap and operator API
 
@@ -86,6 +86,16 @@ Ingestion is atomic and implements these lifecycle rules:
 - Active manual overrides are preserved but excluded from actionable mismatch rate and queue age until they expire.
 - Repeated alert triggers update one active incident and increment its occurrence count.
 - When a condition clears, the active alert is resolved; a later recurrence opens a new incident.
+
+## Nightly scheduler, source adapter, and email
+
+Set `MONITORING_SCHEDULER_TOKEN` to enable `POST /api/monitoring/scheduler/run`. An external cron invokes this endpoint once per night; EntitleGuard then claims each active nightly job once for the current UTC date.
+
+For every claimed job, EntitleGuard calls the globally configured `MONITORING_SOURCE_URL` over HTTPS. The customer-owned source adapter returns a complete pseudonymous snapshot, so EntitleGuard never needs database credentials or raw entitlement identities.
+
+The scheduler persists execution claims and retryable email deliveries. A failed source or email attempt can be retried without duplicating the monitoring run. Critical paid-but-blocked alerts repeat nightly while still open; warning alerts notify only when a new incident opens. Acknowledged critical incidents stop repeating.
+
+See [docs/monitoring-scheduler.md](docs/monitoring-scheduler.md) for the source request/response contract, environment variables, cron example, retry behavior, and email policy.
 
 ## Who this is not for
 
@@ -173,6 +183,8 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - Findings use stable pseudonymous fingerprints rather than raw customer or user identifiers.
 - Raw CSV rows are not part of the server-side monitoring schema.
 - Operator responses do not return stored fingerprints.
+- Alert emails contain aggregate incident state only.
+- The customer-owned source adapter expresses entitlement truth without sharing database credentials.
 - A design partner may still need a small adapter because entitlement truth lives in the customer's own schema; minimizing that integration burden is a core beta constraint.
 
 ## Stack
@@ -180,8 +192,9 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - Next.js App Router, TypeScript, React, and Tailwind CSS v4
 - PapaParse for CSV parsing
 - Pure-TypeScript reconciliation engine in `src/lib/engine`
-- Monitoring ingestion, lifecycle, operator, and alert logic in `src/lib/monitoring`
+- Monitoring ingestion, lifecycle, operator, scheduler, source-adapter, and alert logic in `src/lib/monitoring`
 - SQLite with better-sqlite3 and Drizzle
+- Resend HTTPS API for alert email
 - Vitest
 
 ## Getting started
@@ -212,6 +225,8 @@ The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 3. Keep the `entitleguard-data` named volume mounted so the SQLite database at `/data/entitleguard.db` persists across deploys.
 4. Set a strong `MONITORING_OPERATOR_TOKEN` to enable private job configuration/read endpoints.
 5. Set a different strong `MONITORING_INGEST_TOKEN` only when the private run-ingestion endpoint should be enabled.
+6. Configure `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_URL`, optional `MONITORING_SOURCE_TOKEN`, `MONITORING_ALERT_TO`, `MONITORING_ALERT_FROM`, and `RESEND_API_KEY` for nightly monitoring.
+7. Add a nightly cron request to `POST /api/monitoring/scheduler/run` with the scheduler bearer token.
 
 Run elsewhere with:
 
@@ -228,12 +243,14 @@ The read-only `/admin` dashboard lists captured leads, aggregate audit summaries
 ## Project layout
 
 - `src/lib/engine/` — parsing, mapping, normalization, matching, classification, leakage estimation, masking
-- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, job configuration, operator read models, and alert evaluation
+- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, job configuration, operator read models, nightly scheduling, email delivery, and alert evaluation
 - `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
 - `src/workers/reconcile.worker.ts` — browser-side reconciliation worker
 - `src/components/audit/` — upload, mapping, run, and results flow
-- `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, observations, and alerts
+- `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, observations, alerts, scheduler claims, and email deliveries
 - `src/app/api/monitoring/jobs` — authenticated job bootstrap, configuration, and aggregate operator read endpoints
 - `src/app/api/monitoring/runs` — authenticated, strict, pseudonymous run-ingestion endpoint
+- `src/app/api/monitoring/scheduler/run` — authenticated nightly scheduler trigger
+- `docs/monitoring-scheduler.md` — source-adapter and delivery contract
 - `src/app/api/leads`, `src/app/api/events` — validated lead capture and analytics
 - `public/samples/` — demo CSVs with pre-seeded drift
