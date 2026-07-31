@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { hasValidBearerToken } from "@/lib/monitoring/http-auth";
 import {
   ingestMonitoringRun,
   MonitoringIngestError,
@@ -41,24 +41,13 @@ const runSchema = z
   })
   .strict();
 
-function isAuthorized(request: Request, expectedToken: string): boolean {
-  const supplied = request.headers.get("authorization") ?? "";
-  const expected = `Bearer ${expectedToken}`;
-  const suppliedBytes = Buffer.from(supplied);
-  const expectedBytes = Buffer.from(expected);
-  return (
-    suppliedBytes.length === expectedBytes.length &&
-    timingSafeEqual(suppliedBytes, expectedBytes)
-  );
-}
-
 export async function POST(request: Request) {
   const ingestToken = process.env.MONITORING_INGEST_TOKEN;
   if (!ingestToken) {
     // Do not expose an unfinished beta endpoint unless ingestion is explicitly enabled.
     return new NextResponse(null, { status: 404 });
   }
-  if (!isAuthorized(request, ingestToken)) {
+  if (!hasValidBearerToken(request, ingestToken)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
