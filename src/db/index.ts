@@ -136,6 +136,33 @@ export function initializeDatabase(sqlite: Database.Database) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS monitoring_schedule_executions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL,
+      schedule_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'running',
+      attempt_count INTEGER NOT NULL DEFAULT 1,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      run_id INTEGER,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS monitoring_alert_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alert_id INTEGER NOT NULL,
+      run_id INTEGER NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'email',
+      recipient TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempt_count INTEGER NOT NULL DEFAULT 1,
+      provider_message_id TEXT,
+      error TEXT,
+      delivered_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // Forward-only compatibility for databases created by an earlier beta branch.
@@ -168,6 +195,14 @@ export function initializeDatabase(sqlite: Database.Database) {
     CREATE UNIQUE INDEX IF NOT EXISTS monitoring_alerts_active_dedupe_idx
       ON monitoring_alerts(job_id, dedupe_key)
       WHERE status IN ('open', 'acknowledged');
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_schedule_executions_job_key_idx
+      ON monitoring_schedule_executions(job_id, schedule_key);
+    CREATE INDEX IF NOT EXISTS monitoring_schedule_executions_status_idx
+      ON monitoring_schedule_executions(status, started_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS monitoring_alert_notifications_delivery_idx
+      ON monitoring_alert_notifications(alert_id, run_id, channel, recipient);
+    CREATE INDEX IF NOT EXISTS monitoring_alert_notifications_status_idx
+      ON monitoring_alert_notifications(status, created_at);
   `);
 
   return drizzle(sqlite, { schema });
