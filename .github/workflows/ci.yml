@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/direction-aware-reconciliation
+      - feature/monitoring-beta-foundation
 
 jobs:
   verify:
