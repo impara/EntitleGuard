@@ -15,6 +15,7 @@ services:
       # Monitoring beta endpoints remain disabled unless their tokens are set.
       - MONITORING_INGEST_TOKEN=${MONITORING_INGEST_TOKEN:-}
       - MONITORING_OPERATOR_TOKEN=${MONITORING_OPERATOR_TOKEN:-}
+      - MONITORING_OPERATOR_NAME=${MONITORING_OPERATOR_NAME:-admin}
       - MONITORING_SCHEDULER_TOKEN=${MONITORING_SCHEDULER_TOKEN:-}
       # The scheduler calls one HTTPS source adapter for each active nightly job.
       - MONITORING_SOURCE_URL=${MONITORING_SOURCE_URL:-}
