@@ -31,19 +31,25 @@ const BILLING = ["Stripe", "Paddle", "Chargebee", "Recurly", "Lemon Squeezy", "O
 const DATABASES = ["PostgreSQL", "MySQL", "MongoDB", "Supabase", "Firebase", "DynamoDB", "Other"];
 
 const BETA_OPTIONS: { id: string; label: string }[] = [
-  { id: "daily_monitoring", label: "Daily monitoring" },
-  { id: "slack_alerts", label: "Slack alerts" },
-  { id: "postgres_agent", label: "Postgres read-only agent" },
-  { id: "stripe_api", label: "Stripe API integration" },
-  { id: "sql_remediation", label: "SQL remediation suggestions" },
-  { id: "webhook_detection", label: "Webhook failure detection" },
-  { id: "paid_audit_review", label: "Paid audit review" },
-  { id: "not_interested", label: "Not interested" },
+  { id: "nightly_monitoring", label: "Nightly entitlement monitoring" },
+  { id: "paid_blocked_alerts", label: "Paid-but-blocked alerts after each run" },
+  { id: "fixed_reference_drift", label: "Drift-rate alerts against a fixed reference" },
+  { id: "queue_age_alerts", label: "Unresolved queue-age alerts" },
+  { id: "alert_history", label: "Alert acknowledgement and history" },
+  { id: "override_provenance", label: "Manual override provenance" },
+  { id: "source_adapter_help", label: "Help creating the read-only source adapter" },
 ];
+
+const SUPPORT_INCIDENT_OPTIONS = [
+  { value: "more_than_once", label: "Yes, more than once" },
+  { value: "once", label: "Yes, once" },
+  { value: "not_yet", label: "Not yet" },
+  { value: "unsure", label: "Unsure" },
+] as const;
 
 interface LeadCaptureModalProps {
   requestType: LeadRequestType;
-  summary: AuditSummary;
+  summary?: AuditSummary;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -64,6 +70,7 @@ export function LeadCaptureModal({
   const [billingPlatform, setBillingPlatform] = useState("Stripe");
   const [databaseType, setDatabaseType] = useState("");
   const [betaInterests, setBetaInterests] = useState<string[]>([]);
+  const [supportIncidentFrequency, setSupportIncidentFrequency] = useState("");
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,22 +101,26 @@ export function LeadCaptureModal({
           billingPlatform,
           databaseType: databaseType || undefined,
           betaInterests: betaInterests.length > 0 ? betaInterests : undefined,
+          supportIncidentFrequency:
+            requestType === "monitoring_beta" ? supportIncidentFrequency : undefined,
           wantsMonitoring: requestType === "monitoring_beta" || undefined,
           requestType,
           consent: true,
-          summary: {
-            totalAppRecords: summary.totalAppRecords,
-            totalStripeRecords: summary.totalStripeRecords,
-            matchedRecords: summary.matchedRecords,
-            unpaidActiveCount: summary.unpaidActiveCount,
-            paidBlockedCount: summary.paidBlockedCount,
-            missingBillingLinkCount: summary.missingBillingLinkCount,
-            orphanedStripeCount: summary.orphanedStripeCount,
-            ambiguousCount: summary.ambiguousCount,
-            highConfidenceMismatches: summary.highConfidenceMismatches,
-            dataQualityScore: summary.dataQualityScore,
-            estimatedMonthlyLeakage: summary.leakage.estimatedMonthly,
-          },
+          summary: summary
+            ? {
+                totalAppRecords: summary.totalAppRecords,
+                totalStripeRecords: summary.totalStripeRecords,
+                matchedRecords: summary.matchedRecords,
+                unpaidActiveCount: summary.unpaidActiveCount,
+                paidBlockedCount: summary.paidBlockedCount,
+                missingBillingLinkCount: summary.missingBillingLinkCount,
+                orphanedStripeCount: summary.orphanedStripeCount,
+                ambiguousCount: summary.ambiguousCount,
+                highConfidenceMismatches: summary.highConfidenceMismatches,
+                dataQualityScore: summary.dataQualityScore,
+                estimatedMonthlyLeakage: summary.leakage.estimatedMonthly,
+              }
+            : undefined,
         }),
       });
       if (!response.ok) {
@@ -145,8 +156,9 @@ export function LeadCaptureModal({
           </button>
         </div>
         <p className="mt-2 text-sm text-muted">
-          Your CSV files stay in your browser. We only receive your contact details and the
-          aggregated audit summary shown below — never customer rows or identifiers.
+          {summary
+            ? "Your CSV files stay in your browser. We only receive your contact details and the aggregate audit summary shown below—never customer rows or identifiers."
+            : "Tell us how entitlement incidents show up today. We receive only your answers and contact details—not customer rows, Stripe IDs, or database credentials."}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
@@ -249,7 +261,7 @@ export function LeadCaptureModal({
           </div>
 
           <fieldset>
-            <legend className="mb-2 text-sm">What would you want next?</legend>
+            <legend className="mb-2 text-sm">What matters for your monitoring setup?</legend>
             <div className="flex flex-wrap gap-2">
               {BETA_OPTIONS.map((option) => (
                 <button
@@ -268,14 +280,39 @@ export function LeadCaptureModal({
             </div>
           </fieldset>
 
-          <div className="rounded-lg border border-edge bg-background/60 p-3 text-xs text-muted">
-            <p className="font-medium text-foreground">What we will receive:</p>
-            <p className="mt-1">
-              Contact details above + aggregate counts only (e.g. “{summary.unpaidActiveCount}{" "}
-              unpaid-but-active, {summary.highConfidenceMismatches} high-confidence mismatches,
-              data quality {summary.dataQualityScore}/100”). No emails, IDs, or CSV rows.
-            </p>
-          </div>
+          {requestType === "monitoring_beta" && (
+            <div>
+              <label htmlFor="lead-support-incidents" className="mb-1 block text-sm">
+                Do paid-but-blocked incidents currently reach your support queue?{" "}
+                <span className="text-danger">*</span>
+              </label>
+              <select
+                id="lead-support-incidents"
+                required
+                value={supportIncidentFrequency}
+                onChange={(event) => setSupportIncidentFrequency(event.target.value)}
+                className={inputClass}
+              >
+                <option value="">Select…</option>
+                {SUPPORT_INCIDENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {summary && (
+            <div className="rounded-lg border border-edge bg-background/60 p-3 text-xs text-muted">
+              <p className="font-medium text-foreground">What we will receive:</p>
+              <p className="mt-1">
+                Contact details above + aggregate counts only (e.g. “{summary.unpaidActiveCount}{" "}
+                unpaid-but-active, {summary.highConfidenceMismatches} high-confidence mismatches,
+                data quality {summary.dataQualityScore}/100”). No emails, IDs, or CSV rows.
+              </p>
+            </div>
+          )}
 
           <label className="flex items-start gap-2 text-xs text-muted">
             <input
@@ -285,8 +322,9 @@ export function LeadCaptureModal({
               className="mt-0.5 accent-[var(--accent)]"
             />
             <span>
-              I agree that EntitleGuard may store my contact details and the aggregated audit
-              summary to send me the report and follow up about entitlement monitoring.
+              I agree that EntitleGuard may store my contact details and these qualification
+              answers to follow up about the monitoring beta. If I ran an audit, EntitleGuard may
+              also store the aggregate summary—but never CSV rows or customer identifiers.
             </span>
           </label>
 

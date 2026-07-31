@@ -30,15 +30,16 @@ const REQUEST_TYPES = [
 ] as const;
 
 const BETA_INTERESTS = [
-  "daily_monitoring",
-  "slack_alerts",
-  "postgres_agent",
-  "stripe_api",
-  "sql_remediation",
-  "webhook_detection",
-  "paid_audit_review",
-  "not_interested",
+  "nightly_monitoring",
+  "paid_blocked_alerts",
+  "fixed_reference_drift",
+  "queue_age_alerts",
+  "alert_history",
+  "override_provenance",
+  "source_adapter_help",
 ] as const;
+
+const SUPPORT_INCIDENT_FREQUENCIES = ["more_than_once", "once", "not_yet", "unsure"] as const;
 
 /** Aggregate-only audit summary — counts and bucketed dollars, no identifiers. */
 const summarySchema = z.object({
@@ -55,23 +56,34 @@ const summarySchema = z.object({
   estimatedMonthlyLeakage: z.number().nonnegative(),
 });
 
-const leadSchema = z.object({
-  sessionId: z.string().min(1).max(64),
-  email: z.string().email().max(254),
-  company: z.string().min(1).max(200),
-  role: z.string().min(1).max(100),
-  mrrRange: z.enum(MRR_RANGES),
-  billingPlatform: z.enum(BILLING),
-  databaseType: z.enum(DATABASES).optional(),
-  saasCategory: z.string().max(100).optional(),
-  customerCount: z.string().max(50).optional(),
-  usesUsageBasedCosts: z.boolean().optional(),
-  wantsMonitoring: z.boolean().optional(),
-  betaInterests: z.array(z.enum(BETA_INTERESTS)).max(8).optional(),
-  requestType: z.enum(REQUEST_TYPES),
-  consent: z.literal(true),
-  summary: summarySchema.optional(),
-});
+const leadSchema = z
+  .object({
+    sessionId: z.string().min(1).max(64),
+    email: z.string().email().max(254),
+    company: z.string().min(1).max(200),
+    role: z.string().min(1).max(100),
+    mrrRange: z.enum(MRR_RANGES),
+    billingPlatform: z.enum(BILLING),
+    databaseType: z.enum(DATABASES).optional(),
+    saasCategory: z.string().max(100).optional(),
+    customerCount: z.string().max(50).optional(),
+    usesUsageBasedCosts: z.boolean().optional(),
+    wantsMonitoring: z.boolean().optional(),
+    betaInterests: z.array(z.enum(BETA_INTERESTS)).max(8).optional(),
+    supportIncidentFrequency: z.enum(SUPPORT_INCIDENT_FREQUENCIES).optional(),
+    requestType: z.enum(REQUEST_TYPES),
+    consent: z.literal(true),
+    summary: summarySchema.optional(),
+  })
+  .superRefine((lead, context) => {
+    if (lead.requestType === "monitoring_beta" && !lead.supportIncidentFrequency) {
+      context.addIssue({
+        code: "custom",
+        path: ["supportIncidentFrequency"],
+        message: "Support incident frequency is required for monitoring beta applications",
+      });
+    }
+  });
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -106,6 +118,7 @@ export async function POST(request: Request) {
       usesUsageBasedCosts: data.usesUsageBasedCosts ?? null,
       wantsMonitoring: data.wantsMonitoring ?? null,
       betaInterests: data.betaInterests ? JSON.stringify(data.betaInterests) : null,
+      supportIncidentFrequency: data.supportIncidentFrequency ?? null,
       requestType: data.requestType,
       consentAt,
     })

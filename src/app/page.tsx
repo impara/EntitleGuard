@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LandingAnalytics } from "@/components/LandingAnalytics";
+import { MonitoringBetaButton } from "@/components/MonitoringBetaButton";
 import { SiteHeader } from "@/components/SiteHeader";
 
 const DRIFT_CAUSES = [
@@ -58,13 +59,23 @@ const CATEGORIES = [
   },
 ];
 
-const PRIVACY_POINTS = [
-  "Files are parsed and compared in your browser — never sent to our servers",
-  "Minimal export by design: matching works on Stripe customer IDs — no names or emails required",
-  "No Stripe API keys",
-  "No database credentials",
-  "No login required to run the audit",
-  "We only receive contact details if you request the full report",
+const MONITORING_FEATURES = [
+  {
+    title: "Paid-but-blocked alerts",
+    body: "Page the operator when Stripe says paid but the application denies access—the incident most likely to reach support first.",
+  },
+  {
+    title: "Fixed-reference drift alerts",
+    body: "Compare mismatch rate with an older completed run instead of allowing a slowly worsening baseline to hide the change.",
+  },
+  {
+    title: "Queue-age alerts",
+    body: "See unresolved findings that have sat untriaged beyond your threshold, even when the overall mismatch rate looks stable.",
+  },
+  {
+    title: "Acknowledgement and history",
+    body: "Keep alert history, operator notes, resolution provenance, and explicit manual overrides instead of silently healing the evidence away.",
+  },
 ];
 
 const NOT_FOR = [
@@ -83,15 +94,15 @@ export default function LandingPage() {
         {/* Hero */}
         <section className="mx-auto max-w-5xl px-4 pb-16 pt-20 text-center">
           <p className="mx-auto mb-4 w-fit rounded-full border border-edge px-3 py-1 text-xs text-muted">
-            Stripe-to-app-access reconciliation — for usage-heavy B2B SaaS
+            Read-only Stripe access monitoring for SaaS
           </p>
-          <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
-            Find Stripe users who may be unpaid but still active in your app.
+          <h1 className="mx-auto max-w-4xl text-4xl font-bold leading-tight sm:text-5xl">
+            Know when a paying customer loses access—before support tells you.
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-lg text-muted">
-            Final-state reconciliation — not a webhook fixer. Upload a Stripe export and a
-            minimal app entitlement export. The comparison runs locally in your browser. No API
-            keys. No database access. No server upload.
+          <p className="mx-auto mt-5 max-w-3xl text-lg text-muted">
+            EntitleGuard compares Stripe billing with the access state your application actually
+            uses. Get alerted about paid-but-blocked customers, broader entitlement drift, and
+            mismatches nobody has triaged.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
@@ -100,24 +111,64 @@ export default function LandingPage() {
             >
               Run free local audit
             </Link>
-            <Link
-              href="/audit?demo=1"
-              className="rounded-lg border border-edge px-6 py-3 font-medium hover:border-accent/60"
-            >
+            <MonitoringBetaButton className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
+              Apply for monitoring beta — $79/month
+            </MonitoringBetaButton>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-muted">
+            <Link href="/audit?demo=1" className="hover:text-foreground hover:underline">
               See example report
             </Link>
+            <span aria-hidden="true">·</span>
             <Link
               href="https://github.com/impara/EntitleGuard"
-              className="rounded-lg border border-edge px-6 py-3 font-medium hover:border-accent/60"
+              className="hover:text-foreground hover:underline"
             >
               View source on GitHub
             </Link>
           </div>
-          <p className="mt-5 text-xs text-muted">
-            Free one-time audit today. After the first access incident, many teams only want
-            continuous checks — nightly monitoring is in beta. Your CSV files never leave your
-            browser.
+          <p className="mx-auto mt-5 max-w-3xl text-xs text-muted">
+            Start with a browser-only audit. Monitoring remains read-only and stores only
+            pseudonymous findings and operational history.
           </p>
+        </section>
+
+        {/* Monitoring beta */}
+        <section id="monitoring-beta" className="border-t border-edge bg-surface/40 scroll-mt-20">
+          <div className="mx-auto max-w-5xl px-4 py-16">
+            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+                  Monitoring beta · $79/month
+                </p>
+                <h2 className="mt-3 max-w-3xl text-3xl font-bold">
+                  The audit finds drift once. Monitoring keeps it from becoming a support ticket.
+                </h2>
+                <p className="mt-3 max-w-3xl text-muted">
+                  EntitleGuard runs nightly against a customer-owned, read-only HTTPS source
+                  adapter. It records pseudonymous findings, alerts by email, and keeps the
+                  operator history needed to see what was acknowledged, resolved, or intentionally
+                  overridden.
+                </p>
+              </div>
+              <MonitoringBetaButton className="shrink-0 rounded-lg bg-accent-strong px-5 py-2.5 font-semibold text-background hover:opacity-90">
+                Apply for the beta
+              </MonitoringBetaButton>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              {MONITORING_FEATURES.map((feature) => (
+                <div key={feature.title} className="rounded-xl border border-edge bg-surface p-5">
+                  <h3 className="font-semibold">{feature.title}</h3>
+                  <p className="mt-2 text-sm text-muted">{feature.body}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-6 max-w-3xl text-sm text-muted">
+              Email-first and read-only. No Slack integration, automatic suspension, or SQL
+              remediation in this beta. We help you define the source adapter for your current
+              Stripe and entitlement schema.
+            </p>
+          </div>
         </section>
 
         {/* Differentiation */}
@@ -276,39 +327,56 @@ export default function LandingPage() {
 
         {/* Privacy */}
         <section className="mx-auto max-w-5xl px-4 py-16">
-          <div className="grid items-center gap-10 md:grid-cols-2">
-            <div>
-              <h2 className="text-2xl font-bold">Built to be trusted with nothing.</h2>
-              <p className="mt-3 text-muted">
-                The audit is local-first by design. There is nothing to leak because nothing is
-                collected. The output doubles as a provable entitlement-alignment artifact you
-                can attach to compliance and billing reviews.
-              </p>
-              <p className="mt-3 text-sm text-muted">
-                To be precise: local-only processing means we never receive your data — but
-                exporting customer records remains your responsibility under GDPR and your own
-                data policies. That is why the recommended export is minimal: pseudonymous IDs,
-                statuses, and plans. No names or emails are required.
-              </p>
-              <p className="mt-3 text-sm text-muted">
-                Want to verify the local-only implementation? The source is public on{" "}
-                <Link
-                  href="https://github.com/impara/EntitleGuard"
-                  className="font-medium text-accent hover:underline"
-                >
-                  GitHub
-                </Link>
-                .
-              </p>
+          <div>
+            <h2 className="text-2xl font-bold">Two products, two clear privacy boundaries.</h2>
+            <p className="mt-3 max-w-3xl text-muted">
+              The free audit and monitoring beta handle data differently. Neither requires raw
+              customer rows to be stored by EntitleGuard.
+            </p>
+            <div className="mt-8 grid gap-5 md:grid-cols-2">
+              <div className="rounded-xl border border-edge bg-surface p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+                  Free local audit
+                </p>
+                <h3 className="mt-2 text-lg font-semibold">Your CSV data stays in the browser.</h3>
+                <p className="mt-3 text-sm text-muted">
+                  CSV processing happens entirely in your browser. Customer rows and identifiers
+                  are never uploaded. You do not provide Stripe API keys, database credentials, or
+                  a login to run the audit.
+                </p>
+                <p className="mt-3 text-sm text-muted">
+                  If you request a report or beta access, EntitleGuard receives the contact fields
+                  you submit and, after an audit, aggregate counts—not CSV rows.
+                </p>
+              </div>
+              <div className="rounded-xl border border-edge bg-surface p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+                  Monitoring beta
+                </p>
+                <h3 className="mt-2 text-lg font-semibold">
+                  Operational history is stored without raw customer identifiers.
+                </h3>
+                <p className="mt-3 text-sm text-muted">
+                  EntitleGuard stores pseudonymous mismatch fingerprints, aggregate run results,
+                  alert history, email delivery records, scheduler executions, and operator actions.
+                </p>
+                <p className="mt-3 text-sm text-muted">
+                  The source adapter does not send raw customer emails, Stripe IDs, database
+                  credentials, or CSV rows. Monitoring stays read-only and does not grant or revoke
+                  access.
+                </p>
+              </div>
             </div>
-            <ul className="space-y-3">
-              {PRIVACY_POINTS.map((point) => (
-                <li key={point} className="flex items-start gap-3 text-sm">
-                  <span className="mt-0.5 text-accent">✓</span>
-                  {point}
-                </li>
-              ))}
-            </ul>
+            <p className="mt-5 text-sm text-muted">
+              Verify the implementation on{" "}
+              <Link
+                href="https://github.com/impara/EntitleGuard"
+                className="font-medium text-accent hover:underline"
+              >
+                GitHub
+              </Link>
+              .
+            </p>
           </div>
         </section>
 
@@ -316,12 +384,11 @@ export default function LandingPage() {
         <section className="border-t border-edge">
           <div className="mx-auto max-w-5xl px-4 py-16 text-center">
             <h2 className="text-3xl font-bold">
-              Do Stripe and your database agree? Find out now.
+              Start with the audit. Monitor the drift that matters.
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-muted">
-              Built for usage-heavy B2B SaaS on Stripe where an active account costs real money
-              every month — AI, compute, scraping, enrichment. Initial focus: Postgres-style
-              exports; nightly API reconciliation in beta.
+            <p className="mx-auto mt-3 max-w-2xl text-muted">
+              Run the browser-only audit for a current snapshot. If entitlement incidents already
+              create support work, apply for nightly read-only monitoring at $79/month.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-4">
               <Link
@@ -330,21 +397,18 @@ export default function LandingPage() {
               >
                 Run free local audit
               </Link>
-              <Link
-                href="/audit?demo=1"
-                className="rounded-lg border border-edge px-6 py-3 font-medium hover:border-accent/60"
-              >
-                Try it with sample data
-              </Link>
+              <MonitoringBetaButton className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
+                Apply for monitoring beta
+              </MonitoringBetaButton>
             </div>
           </div>
         </section>
 
         <footer className="border-t border-edge">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted">
-            <p>EntitleGuard — local-first Stripe-to-app-access reconciliation.</p>
+            <p>EntitleGuard — read-only Stripe-to-app-access monitoring.</p>
             <div className="flex flex-wrap items-center gap-3">
-              <p>CSV files are read locally in your browser and never sent to EntitleGuard.</p>
+              <p>Local audit data stays in your browser; monitoring stores pseudonymous history.</p>
               <Link href="https://github.com/impara/EntitleGuard" className="text-accent hover:underline">
                 GitHub
               </Link>

@@ -9,12 +9,15 @@ export function SiteHeader() {
             EG
           </span>
           EntitleGuard
-          <span className="rounded-full border border-edge px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
-            Audit
+          <span className="rounded-full border border-accent/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+            Monitoring beta
           </span>
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/audit?demo=1" className="text-muted hover:text-foreground">
+          <Link href="/#monitoring-beta" className="hidden text-muted hover:text-foreground sm:inline">
+            Monitoring beta
+          </Link>
+          <Link href="/audit?demo=1" className="hidden text-muted hover:text-foreground md:inline">
             Example report
           </Link>
           <Link

@@ -41,6 +41,7 @@ export function initializeDatabase(sqlite: Database.Database) {
       uses_usage_based_costs INTEGER,
       wants_monitoring INTEGER,
       beta_interests TEXT,
+      support_incident_frequency TEXT,
       request_type TEXT NOT NULL,
       consent_at TEXT NOT NULL,
       created_at TEXT NOT NULL
@@ -169,6 +170,7 @@ export function initializeDatabase(sqlite: Database.Database) {
   `);
 
   // Forward-only compatibility for databases created by an earlier beta branch.
+  ensureColumn(sqlite, "leads", "support_incident_frequency", "TEXT");
   ensureColumn(sqlite, "monitoring_jobs", "reference_tolerance_days", "INTEGER NOT NULL DEFAULT 7");
   ensureColumn(sqlite, "monitoring_runs", "ingest_key", "TEXT");
   ensureColumn(sqlite, "monitoring_findings", "first_seen_run_id", "INTEGER");

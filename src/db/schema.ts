@@ -19,6 +19,7 @@ export const leads = sqliteTable("leads", {
   usesUsageBasedCosts: integer("uses_usage_based_costs", { mode: "boolean" }),
   wantsMonitoring: integer("wants_monitoring", { mode: "boolean" }),
   betaInterests: text("beta_interests"), // JSON string[]
+  supportIncidentFrequency: text("support_incident_frequency"),
   requestType: text("request_type").notNull(),
   consentAt: text("consent_at").notNull(),
   createdAt: text("created_at")

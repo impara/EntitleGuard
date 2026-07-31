@@ -140,9 +140,10 @@ export function ResultsView({
           </button>
         </div>
         <p className="mt-3 text-xs text-muted">
-          Monitoring beta: nightly Stripe ↔ app diff, mismatch-rate history, direction-aware
-          alerts, explicit override preservation, and a review queue. Read-only by default;
-          revoke candidates require repeated agreement before any future automation.
+          Monitoring beta: nightly read-only reconciliation, paid-but-blocked alerts after each
+          run, fixed-reference drift and queue-age alerts, acknowledgement history, and manual
+          override provenance. We help define the customer-owned HTTPS source adapter for your
+          current schema. $79/month.
         </p>
         {leadSubmitted && (
           <p className="mt-3 text-sm text-accent">
