@@ -31,11 +31,19 @@ export async function POST(request: Request) {
     MONITORING_SOURCE_URL: process.env.MONITORING_SOURCE_URL,
     MONITORING_ALERT_TO: process.env.MONITORING_ALERT_TO,
     MONITORING_ALERT_FROM: process.env.MONITORING_ALERT_FROM,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
   };
   const missing = Object.entries(required)
     .filter(([, value]) => !value?.trim())
     .map(([name]) => name);
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  const smtp = {
+    host: process.env.SMTP_HOST?.trim() ?? "",
+    port: Number(process.env.SMTP_PORT ?? "587"),
+    user: process.env.SMTP_USER?.trim() ?? "",
+    pass: process.env.SMTP_PASS?.trim() ?? "",
+  };
+  const smtpConfigured = Boolean(smtp.host && smtp.user && smtp.pass && Number.isInteger(smtp.port));
+  if (!resendApiKey && !smtpConfigured) missing.push("RESEND_API_KEY or SMTP credentials");
   if (missing.length > 0) {
     return jsonNoStore({ error: "Monitoring scheduler is not configured", missing }, 503);
   }
@@ -46,7 +54,15 @@ export async function POST(request: Request) {
       sourceToken: process.env.MONITORING_SOURCE_TOKEN,
       alertTo: recipients(required.MONITORING_ALERT_TO),
       alertFrom: required.MONITORING_ALERT_FROM!,
-      resendApiKey: required.RESEND_API_KEY!,
+      resendApiKey,
+      ...(smtpConfigured
+        ? {
+            smtp: {
+              ...smtp,
+              secure: process.env.SMTP_SECURE === "true" || smtp.port === 465,
+            },
+          }
+        : {}),
       publicUrl: process.env.MONITORING_PUBLIC_URL,
       allowInsecureSource: process.env.NODE_ENV !== "production",
     });

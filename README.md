@@ -21,7 +21,7 @@ The beta is centered on operational alerts rather than a dashboard people may fo
 - **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
 - **Read-only by default:** no automatic access grant or revocation.
 
-The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, aggregate operator read APIs, a retry-safe nightly scheduler, a customer-owned HTTPS source-adapter contract, Resend email delivery, alert acknowledgement/resolution provenance, and a minimal operator UI.
+The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, aggregate operator read APIs, a retry-safe nightly scheduler, a customer-owned HTTPS source-adapter contract, Resend or SMTP email delivery, an authenticated production canary source, alert acknowledgement/resolution provenance, and a minimal operator UI.
 
 ## Monitoring job bootstrap and operator API
 
@@ -118,7 +118,7 @@ For every claimed job, EntitleGuard calls the globally configured `MONITORING_SO
 
 The scheduler persists execution claims and retryable email deliveries. A failed source or email attempt can be retried without duplicating the monitoring run. Critical paid-but-blocked alerts repeat nightly while still open; warning alerts notify only when a new incident opens. Acknowledged critical incidents stop repeating.
 
-See [docs/monitoring-scheduler.md](docs/monitoring-scheduler.md) for the source request/response contract, environment variables, cron example, retry behavior, and email policy.
+See [docs/monitoring-scheduler.md](docs/monitoring-scheduler.md) for the source request/response contract, built-in canary, environment variables, cron example, retry behavior, and email policy.
 
 ## Who this is not for
 
@@ -217,7 +217,7 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - Pure-TypeScript reconciliation engine in `src/lib/engine`
 - Monitoring ingestion, lifecycle, operator, scheduler, source-adapter, and alert logic in `src/lib/monitoring`
 - SQLite with better-sqlite3 and Drizzle
-- Resend HTTPS API for alert email
+- Resend HTTPS API or authenticated SMTP for alert email
 - Vitest
 
 ## Getting started
@@ -249,7 +249,7 @@ The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 4. Set a strong `MONITORING_OPERATOR_TOKEN` to enable private job configuration/read/action endpoints.
 5. Optionally set `MONITORING_OPERATOR_NAME` for UI action provenance.
 6. Set a different strong `MONITORING_INGEST_TOKEN` only when the private run-ingestion endpoint should be enabled.
-7. Configure `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_URL`, optional `MONITORING_SOURCE_TOKEN`, `MONITORING_ALERT_TO`, `MONITORING_ALERT_FROM`, and `RESEND_API_KEY` for nightly monitoring.
+7. Configure `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_URL`, optional `MONITORING_SOURCE_TOKEN`, `MONITORING_ALERT_TO`, and `MONITORING_ALERT_FROM` for nightly monitoring. Configure either `RESEND_API_KEY` or the SMTP variables documented in `docs/monitoring-scheduler.md`.
 8. Add a nightly cron request to `POST /api/monitoring/scheduler/run` with the scheduler bearer token.
 
 Run elsewhere with:

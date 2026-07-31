@@ -57,7 +57,7 @@ describe("nightly monitoring scheduler", () => {
   });
 
   it("claims each UTC date once and repeats critical email until acknowledgement", async () => {
-    const job = createMonitoringJob({ name: "Production" }, database);
+    createMonitoringJob({ name: "Production" }, database);
     const calls: string[] = [];
     const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -153,6 +153,42 @@ describe("nightly monitoring scheduler", () => {
     expect(database.select().from(monitoringScheduleExecutions).get()).toMatchObject({
       status: "completed",
       attemptCount: 2,
+    });
+  });
+
+  it("delivers alerts through configured SMTP without requiring Resend", async () => {
+    createMonitoringJob({ name: "SMTP partner" }, database);
+    const smtpConfig: MonitoringSchedulerConfig = {
+      ...config,
+      resendApiKey: undefined,
+      smtp: {
+        host: "smtp.example.invalid",
+        port: 587,
+        user: "mailer@example.invalid",
+        pass: "smtp-secret",
+      },
+    };
+    const messages: Array<{ subject: string; to: string[] }> = [];
+
+    const result = await runNightlyMonitoring(smtpConfig, database, {
+      now: new Date("2026-08-06T03:00:00.000Z"),
+      fetch: (async () => Response.json(snapshot())) as typeof fetch,
+      sendEmail: async (message) => {
+        messages.push({ subject: message.subject, to: message.to });
+        return { id: "smtp-message-1" };
+      },
+    });
+
+    expect(result).toMatchObject({ completed: 1, failed: 0 });
+    expect(messages).toEqual([
+      {
+        subject: expect.stringContaining("Paying customer blocked"),
+        to: ["owner@example.invalid"],
+      },
+    ]);
+    expect(database.select().from(monitoringAlertNotifications).get()).toMatchObject({
+      status: "delivered",
+      providerMessageId: "smtp-message-1",
     });
   });
 

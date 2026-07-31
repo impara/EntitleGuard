@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import nodemailer from "nodemailer";
 import { z } from "zod";
 import {
   db as defaultDb,
@@ -50,7 +51,14 @@ export interface MonitoringSchedulerConfig {
   sourceToken?: string;
   alertTo: string[];
   alertFrom: string;
-  resendApiKey: string;
+  resendApiKey?: string;
+  smtp?: {
+    host: string;
+    port: number;
+    user: string;
+    pass: string;
+    secure?: boolean;
+  };
   publicUrl?: string;
   allowInsecureSource?: boolean;
   sourceTimeoutMs?: number;
@@ -79,6 +87,15 @@ export interface MonitoringSchedulerResult {
 interface SchedulerDependencies {
   now?: Date;
   fetch?: typeof fetch;
+  sendEmail?: (message: OutboundAlertEmail) => Promise<{ id?: string }>;
+}
+
+export interface OutboundAlertEmail {
+  from: string;
+  to: string[];
+  subject: string;
+  text: string;
+  html: string;
 }
 
 interface ClaimedExecution {
@@ -124,7 +141,18 @@ function assertConfig(config: MonitoringSchedulerConfig): void {
     throw new Error("MONITORING_ALERT_TO must contain at least one email address");
   }
   if (!config.alertFrom.trim()) throw new Error("MONITORING_ALERT_FROM is required");
-  if (!config.resendApiKey.trim()) throw new Error("RESEND_API_KEY is required");
+  const resendConfigured = Boolean(config.resendApiKey?.trim());
+  const smtpConfigured = Boolean(
+    config.smtp?.host.trim() &&
+      config.smtp.user.trim() &&
+      config.smtp.pass.trim() &&
+      Number.isInteger(config.smtp.port) &&
+      config.smtp.port > 0 &&
+      config.smtp.port <= 65_535,
+  );
+  if (!resendConfigured && !smtpConfigured) {
+    throw new Error("Configure RESEND_API_KEY or SMTP_HOST, SMTP_USER, and SMTP_PASS");
+  }
 }
 
 function claimExecution(
@@ -332,6 +360,44 @@ function emailContent(
   return { subject, text, html };
 }
 
+async function sendConfiguredEmail(
+  config: MonitoringSchedulerConfig,
+  message: OutboundAlertEmail,
+  fetchImpl: typeof fetch,
+): Promise<{ id?: string }> {
+  if (config.smtp) {
+    const transporter = nodemailer.createTransport({
+      host: config.smtp.host,
+      port: config.smtp.port,
+      secure: config.smtp.secure ?? config.smtp.port === 465,
+      auth: { user: config.smtp.user, pass: config.smtp.pass },
+    });
+    const result = await transporter.sendMail(message);
+    return { id: result.messageId };
+  }
+
+  const response = await fetchImpl(RESEND_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(message),
+    signal: AbortSignal.timeout(config.emailTimeoutMs ?? DEFAULT_EMAIL_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const details = await readErrorResponse(response);
+    throw new Error(`email provider returned ${response.status}${details ? `: ${details}` : ""}`);
+  }
+
+  try {
+    const responseBody = (await response.json()) as { id?: unknown };
+    return { id: typeof responseBody.id === "string" ? responseBody.id : undefined };
+  } catch {
+    return {};
+  }
+}
+
 async function deliverEmail(
   database: DatabaseClient,
   config: MonitoringSchedulerConfig,
@@ -340,6 +406,7 @@ async function deliverEmail(
   runId: number,
   fetchImpl: typeof fetch,
   now: Date,
+  sendEmailImpl?: (message: OutboundAlertEmail) => Promise<{ id?: string }>,
 ): Promise<boolean> {
   const recipient = [...config.alertTo].sort().join(",");
   const existing = database
@@ -389,39 +456,22 @@ async function deliverEmail(
 
   const content = emailContent(job, alert, runId, config.publicUrl);
   try {
-    const response = await fetchImpl(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.resendApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: config.alertFrom,
-        to: config.alertTo,
-        subject: content.subject,
-        text: content.text,
-        html: content.html,
-      }),
-      signal: AbortSignal.timeout(config.emailTimeoutMs ?? DEFAULT_EMAIL_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      const details = await readErrorResponse(response);
-      throw new Error(`email provider returned ${response.status}${details ? `: ${details}` : ""}`);
-    }
-
-    let providerMessageId: string | null = null;
-    try {
-      const responseBody = (await response.json()) as { id?: unknown };
-      providerMessageId = typeof responseBody.id === "string" ? responseBody.id : null;
-    } catch {
-      // A successful provider response without JSON is still a delivered attempt.
-    }
+    const message: OutboundAlertEmail = {
+      from: config.alertFrom,
+      to: config.alertTo,
+      subject: content.subject,
+      text: content.text,
+      html: content.html,
+    };
+    const providerResult = await (sendEmailImpl
+      ? sendEmailImpl(message)
+      : sendConfiguredEmail(config, message, fetchImpl));
     const deliveredAt = new Date().toISOString();
     database
       .update(monitoringAlertNotifications)
       .set({
         status: "delivered",
-        providerMessageId,
+        providerMessageId: providerResult.id ?? null,
         error: null,
         deliveredAt,
         updatedAt: deliveredAt,
@@ -447,6 +497,7 @@ async function deliverTriggeredAlerts(
   runId: number,
   fetchImpl: typeof fetch,
   now: Date,
+  sendEmailImpl?: (message: OutboundAlertEmail) => Promise<{ id?: string }>,
 ): Promise<number> {
   const triggeredAlerts = database
     .select({
@@ -474,7 +525,9 @@ async function deliverTriggeredAlerts(
     // Critical paid-but-blocked incidents repeat nightly until acknowledged.
     // Warning incidents send once when first opened to avoid dashboard-by-email noise.
     if (alert.type !== "paid_blocked" && alert.occurrenceCount > 1) continue;
-    if (await deliverEmail(database, config, job, alert, runId, fetchImpl, now)) delivered += 1;
+    if (await deliverEmail(database, config, job, alert, runId, fetchImpl, now, sendEmailImpl)) {
+      delivered += 1;
+    }
   }
   return delivered;
 }
@@ -487,6 +540,7 @@ async function runClaimedJob(
   execution: ClaimedExecution,
   fetchImpl: typeof fetch,
   now: Date,
+  sendEmailImpl?: (message: OutboundAlertEmail) => Promise<{ id?: string }>,
 ): Promise<MonitoringScheduledJobResult> {
   let runId: number | undefined;
   try {
@@ -515,6 +569,7 @@ async function runClaimedJob(
       result.runId,
       fetchImpl,
       now,
+      sendEmailImpl,
     );
     finishExecution(database, execution.id, new Date().toISOString(), result.runId);
     return { jobId: job.id, jobName: job.name, status: "completed", runId, alertsDelivered };
@@ -564,7 +619,18 @@ export async function runNightlyMonitoring(
       });
       continue;
     }
-    results.push(await runClaimedJob(database, config, job, scheduleKey, execution, fetchImpl, now));
+    results.push(
+      await runClaimedJob(
+        database,
+        config,
+        job,
+        scheduleKey,
+        execution,
+        fetchImpl,
+        now,
+        dependencies.sendEmail,
+      ),
+    );
   }
 
   return {

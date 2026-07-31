@@ -12,13 +12,40 @@ MONITORING_SOURCE_URL=https://customer-adapter.example.com/entitleguard/nightly
 MONITORING_SOURCE_TOKEN=<bearer token sent to the source adapter>
 MONITORING_ALERT_TO=owner@example.com,support-lead@example.com
 MONITORING_ALERT_FROM=EntitleGuard <alerts@example.com>
-RESEND_API_KEY=re_...
 MONITORING_PUBLIC_URL=https://entitleguard.example.com
+```
+
+Configure one email provider. Resend remains supported:
+
+```text
+RESEND_API_KEY=re_...
+```
+
+Or use SMTP, including the Mailgun SMTP setup already used by the other Amer Tech products:
+
+```text
+SMTP_HOST=smtp.eu.mailgun.org
+SMTP_PORT=587
+SMTP_USER=<smtp-user>
+SMTP_PASS=<smtp-password>
+SMTP_SECURE=false
 ```
 
 `MONITORING_PUBLIC_URL` is optional. The scheduler endpoint returns `404` while `MONITORING_SCHEDULER_TOKEN` is unset.
 
 Use separate values for `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_TOKEN`, `MONITORING_OPERATOR_TOKEN`, and `MONITORING_INGEST_TOKEN`.
+
+## Production canary source
+
+When there is no real design-partner adapter yet, the built-in authenticated canary can exercise the complete scheduler, persistence, and operator path without customer data:
+
+```text
+MONITORING_SOURCE_URL=https://entitleguard.amertech.online/api/monitoring/source/canary
+MONITORING_SOURCE_TOKEN=<separate strong token>
+MONITORING_CANARY_MODE=healthy
+```
+
+`healthy` returns a complete synthetic snapshot with no findings. `paid_blocked` returns one deterministic pseudonymous finding and is reserved for an explicitly approved end-to-end alert-email test. Never leave production in `paid_blocked` mode after the test. The canary proves operations, not customer reconciliation; replace it with a customer-owned adapter before calling the product validated against real entitlement data.
 
 ## Trigger endpoint
 
@@ -115,4 +142,4 @@ These tables are part of the same persistent SQLite volume as monitoring runs an
 
 ## Current beta boundary
 
-The scheduler uses one globally configured source adapter URL and one globally configured recipient set. That is intentional for the first design partner. Per-job credentials, delivery routing, Slack/PagerDuty, automatic remediation, and a hosted integration marketplace remain out of scope until real usage justifies them.
+The scheduler uses one globally configured source adapter URL and one globally configured recipient set. That is intentional for the first design partner. Email supports either Resend or authenticated SMTP. Per-job credentials, delivery routing, Slack/PagerDuty, automatic remediation, and a hosted integration marketplace remain out of scope until real usage justifies them.

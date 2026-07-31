@@ -20,10 +20,18 @@ services:
       # The scheduler calls one HTTPS source adapter for each active nightly job.
       - MONITORING_SOURCE_URL=${MONITORING_SOURCE_URL:-}
       - MONITORING_SOURCE_TOKEN=${MONITORING_SOURCE_TOKEN:-}
-      # Comma-separated recipients. Resend is used through its HTTPS API.
+      # Safe self-test adapter. Keep healthy in production; paid_blocked is only
+      # for an explicitly approved end-to-end alert test.
+      - MONITORING_CANARY_MODE=${MONITORING_CANARY_MODE:-healthy}
+      # Comma-separated recipients. Configure either Resend or SMTP.
       - MONITORING_ALERT_TO=${MONITORING_ALERT_TO:-}
       - MONITORING_ALERT_FROM=${MONITORING_ALERT_FROM:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
       - MONITORING_PUBLIC_URL=${MONITORING_PUBLIC_URL:-}
     volumes:
       # Persists leads, audit summaries, analytics events, monitoring history,
