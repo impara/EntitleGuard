@@ -21,13 +21,40 @@ The beta is centered on operational alerts rather than a dashboard people may fo
 - **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
 - **Read-only by default:** no automatic access grant or revocation.
 
-The current implementation includes the monitoring domain model, persistent jobs and runs, finding observations and lifecycle, fixed-reference selection, alert evaluation, authenticated run ingestion, and active-alert deduplication. Operator UI, scheduling, acknowledgement endpoints, and email delivery remain later milestones.
+The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, and aggregate operator read APIs. Operator UI, scheduling, acknowledgement endpoints, and email delivery remain later milestones.
+
+## Monitoring job bootstrap and operator API
+
+Set `MONITORING_OPERATOR_TOKEN` to enable the private operator endpoints. They require `Authorization: Bearer <token>` and return `404` while the token is unset.
+
+Create a job with `POST /api/monitoring/jobs`:
+
+```json
+{
+  "name": "Production subscriptions",
+  "schedule": "nightly",
+  "paidBlockedThreshold": 1,
+  "driftRateIncreaseBps": 100,
+  "queueAgeThresholdHours": 168,
+  "referenceAgeDays": 28,
+  "referenceToleranceDays": 7
+}
+```
+
+Available operator endpoints:
+
+- `GET /api/monitoring/jobs` — list jobs with health, latest-run aggregates, active-alert counts, and open-finding counts.
+- `POST /api/monitoring/jobs` — bootstrap a job and its alert thresholds.
+- `GET /api/monitoring/jobs/{jobId}?runs=30` — read one job, recent runs, active alert incidents, queue age, and category counts.
+- `PATCH /api/monitoring/jobs/{jobId}` — change the name, schedule, active/paused state, or alert thresholds.
+
+The operator responses deliberately omit finding fingerprints and all raw entitlement identities. They expose only job configuration, aggregate run state, alert candidates, counts, and timestamps. Use a separate operator token from the ingestion token so a source adapter cannot reconfigure its own monitoring policy.
 
 ## Monitoring run ingestion
 
 `POST /api/monitoring/runs` persists one completed run. The endpoint is disabled unless `MONITORING_INGEST_TOKEN` is configured and requires `Authorization: Bearer <token>`.
 
-A monitoring job must already exist in `monitoring_jobs`. Each request supplies a caller-generated idempotency key and stable 64-character SHA-256 or HMAC fingerprints; keyed HMAC fingerprints are preferred. Raw customer emails, Stripe customer IDs, internal user IDs, and CSV rows are rejected by the strict payload schema.
+A monitoring job must already exist. Each request supplies a caller-generated idempotency key and stable 64-character SHA-256 or HMAC fingerprints; keyed HMAC fingerprints are preferred. Raw customer emails, Stripe customer IDs, internal user IDs, and CSV rows are rejected by the strict payload schema.
 
 ```json
 {
@@ -145,6 +172,7 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - The monitoring data path is explicit and read-only.
 - Findings use stable pseudonymous fingerprints rather than raw customer or user identifiers.
 - Raw CSV rows are not part of the server-side monitoring schema.
+- Operator responses do not return stored fingerprints.
 - A design partner may still need a small adapter because entitlement truth lives in the customer's own schema; minimizing that integration burden is a core beta constraint.
 
 ## Stack
@@ -152,7 +180,7 @@ Accepted override values include `true`/`false`, `1`/`0`, and `yes`/`no`.
 - Next.js App Router, TypeScript, React, and Tailwind CSS v4
 - PapaParse for CSV parsing
 - Pure-TypeScript reconciliation engine in `src/lib/engine`
-- Monitoring ingestion and alert logic in `src/lib/monitoring`
+- Monitoring ingestion, lifecycle, operator, and alert logic in `src/lib/monitoring`
 - SQLite with better-sqlite3 and Drizzle
 - Vitest
 
@@ -182,7 +210,8 @@ The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 1. In Coolify, add a Docker Compose resource pointing at this repository.
 2. Configure the generated FQDN or override it with the intended domain.
 3. Keep the `entitleguard-data` named volume mounted so the SQLite database at `/data/entitleguard.db` persists across deploys.
-4. Set `MONITORING_INGEST_TOKEN` only when the private monitoring ingestion endpoint should be enabled.
+4. Set a strong `MONITORING_OPERATOR_TOKEN` to enable private job configuration/read endpoints.
+5. Set a different strong `MONITORING_INGEST_TOKEN` only when the private run-ingestion endpoint should be enabled.
 
 Run elsewhere with:
 
@@ -199,11 +228,12 @@ The read-only `/admin` dashboard lists captured leads, aggregate audit summaries
 ## Project layout
 
 - `src/lib/engine/` — parsing, mapping, normalization, matching, classification, leakage estimation, masking
-- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, and alert evaluation
+- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, job configuration, operator read models, and alert evaluation
 - `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
 - `src/workers/reconcile.worker.ts` — browser-side reconciliation worker
 - `src/components/audit/` — upload, mapping, run, and results flow
 - `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, observations, and alerts
+- `src/app/api/monitoring/jobs` — authenticated job bootstrap, configuration, and aggregate operator read endpoints
 - `src/app/api/monitoring/runs` — authenticated, strict, pseudonymous run-ingestion endpoint
 - `src/app/api/leads`, `src/app/api/events` — validated lead capture and analytics
 - `public/samples/` — demo CSVs with pre-seeded drift
