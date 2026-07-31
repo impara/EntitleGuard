@@ -129,7 +129,10 @@ function assertIntegerRange(value: number, field: string, minimum: number, maxim
   }
 }
 
-function validateJobValues(input: CreateMonitoringJobInput, partial: boolean): void {
+function validateJobValues(
+  input: Partial<CreateMonitoringJobInput>,
+  partial: boolean,
+): void {
   if (!partial || input.name !== undefined) {
     const name = input.name?.trim() ?? "";
     if (!name || name.length > 200) {
