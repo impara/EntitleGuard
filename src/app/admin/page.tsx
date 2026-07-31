@@ -83,8 +83,13 @@ export default function AdminPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
-      <div className="mb-8 flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">EntitleGuard admin</h1>
+      <div className="mb-8 flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">EntitleGuard admin</h1>
+          <a href="/admin/monitoring" className="mt-2 inline-block text-sm font-semibold text-accent hover:underline">
+            Open monitoring operator →
+          </a>
+        </div>
         <p className="text-sm text-muted">
           {leadRows.length} lead{leadRows.length === 1 ? "" : "s"} · read-only
         </p>
