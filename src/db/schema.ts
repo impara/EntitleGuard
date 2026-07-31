@@ -143,7 +143,10 @@ export const monitoringAlerts = sqliteTable("monitoring_alerts", {
   lastTriggeredAt: text("last_triggered_at"),
   acknowledgedBy: text("acknowledged_by"),
   acknowledgedAt: text("acknowledged_at"),
+  acknowledgementNote: text("acknowledgement_note"),
+  resolvedBy: text("resolved_by"),
   resolvedAt: text("resolved_at"),
+  resolutionNote: text("resolution_note"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
