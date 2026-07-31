@@ -17,6 +17,7 @@ import type {
 export type MonitoringJobStatus = "active" | "paused";
 export type MonitoringJobSchedule = "nightly" | "manual";
 export type MonitoringJobHealth = "critical" | "warning" | "healthy" | "no_data" | "paused";
+export type MonitoringAlertTransitionAction = "acknowledge" | "resolve";
 
 export interface MonitoringJobConfig {
   id: number;
@@ -62,6 +63,7 @@ export interface MonitoringRunView {
 
 export interface MonitoringAlertView {
   id: number;
+  jobId: number;
   type: MonitoringAlertType;
   severity: MonitoringAlertSeverity;
   status: MonitoringAlertStatus;
@@ -72,6 +74,16 @@ export interface MonitoringAlertView {
   lastTriggeredAt: string | null;
   acknowledgedBy: string | null;
   acknowledgedAt: string | null;
+  acknowledgementNote: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+}
+
+export interface TransitionMonitoringAlertInput {
+  action: MonitoringAlertTransitionAction;
+  actor: string;
+  note?: string | null;
 }
 
 export interface MonitoringFindingSummary {
@@ -107,6 +119,21 @@ export class MonitoringJobError extends Error {
   ) {
     super(message);
     this.name = "MonitoringJobError";
+  }
+}
+
+export type MonitoringAlertErrorCode =
+  | "ALERT_NOT_FOUND"
+  | "INVALID_ALERT"
+  | "INVALID_ALERT_TRANSITION";
+
+export class MonitoringAlertError extends Error {
+  constructor(
+    public readonly code: MonitoringAlertErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MonitoringAlertError";
   }
 }
 
@@ -210,6 +237,7 @@ function parseAlertDetails(value: string): Record<string, unknown> | null {
 function rowToAlert(row: typeof monitoringAlerts.$inferSelect): MonitoringAlertView {
   return {
     id: row.id,
+    jobId: row.jobId,
     type: row.type as MonitoringAlertType,
     severity: row.severity as MonitoringAlertSeverity,
     status: row.status as MonitoringAlertStatus,
@@ -220,6 +248,10 @@ function rowToAlert(row: typeof monitoringAlerts.$inferSelect): MonitoringAlertV
     lastTriggeredAt: row.lastTriggeredAt,
     acknowledgedBy: row.acknowledgedBy,
     acknowledgedAt: row.acknowledgedAt,
+    acknowledgementNote: row.acknowledgementNote,
+    resolvedBy: row.resolvedBy,
+    resolvedAt: row.resolvedAt,
+    resolutionNote: row.resolutionNote,
   };
 }
 
@@ -377,6 +409,81 @@ export function updateMonitoringJob(
     .get();
 
   return rowToJob(updated);
+}
+
+export function transitionMonitoringAlert(
+  alertId: number,
+  input: TransitionMonitoringAlertInput,
+  database: DatabaseClient = defaultDb,
+  now: Date = new Date(),
+): MonitoringAlertView {
+  if (!Number.isInteger(alertId) || alertId <= 0) {
+    throw new MonitoringAlertError("INVALID_ALERT", "alertId must be a positive integer");
+  }
+
+  const actor = input.actor.trim();
+  if (!actor || actor.length > 200) {
+    throw new MonitoringAlertError("INVALID_ALERT", "actor must be between 1 and 200 characters");
+  }
+  if (input.action !== "acknowledge" && input.action !== "resolve") {
+    throw new MonitoringAlertError("INVALID_ALERT", "action must be acknowledge or resolve");
+  }
+
+  const note = input.note?.trim() || null;
+  if (note && note.length > 2_000) {
+    throw new MonitoringAlertError("INVALID_ALERT", "note cannot exceed 2000 characters");
+  }
+
+  const existing = database
+    .select()
+    .from(monitoringAlerts)
+    .where(eq(monitoringAlerts.id, alertId))
+    .get();
+  if (!existing) {
+    throw new MonitoringAlertError("ALERT_NOT_FOUND", `monitoring alert ${alertId} was not found`);
+  }
+
+  if (input.action === "acknowledge") {
+    if (existing.status === "resolved") {
+      throw new MonitoringAlertError(
+        "INVALID_ALERT_TRANSITION",
+        "a resolved alert cannot be acknowledged",
+      );
+    }
+    if (existing.status === "acknowledged") return rowToAlert(existing);
+
+    const acknowledgedAt = now.toISOString();
+    const updated = database
+      .update(monitoringAlerts)
+      .set({
+        status: "acknowledged",
+        acknowledgedBy: actor,
+        acknowledgedAt,
+        acknowledgementNote: note,
+        updatedAt: acknowledgedAt,
+      })
+      .where(eq(monitoringAlerts.id, alertId))
+      .returning()
+      .get();
+    return rowToAlert(updated);
+  }
+
+  if (existing.status === "resolved") return rowToAlert(existing);
+
+  const resolvedAt = now.toISOString();
+  const updated = database
+    .update(monitoringAlerts)
+    .set({
+      status: "resolved",
+      resolvedBy: actor,
+      resolvedAt,
+      resolutionNote: note,
+      updatedAt: resolvedAt,
+    })
+    .where(eq(monitoringAlerts.id, alertId))
+    .returning()
+    .get();
+  return rowToAlert(updated);
 }
 
 export function getMonitoringJobDetail(
