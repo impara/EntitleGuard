@@ -151,3 +151,42 @@ export const monitoringAlerts = sqliteTable("monitoring_alerts", {
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
 });
+
+/** One claimed nightly execution per monitoring job and UTC calendar date. */
+export const monitoringScheduleExecutions = sqliteTable("monitoring_schedule_executions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  jobId: integer("job_id").notNull(),
+  scheduleKey: text("schedule_key").notNull(),
+  status: text("status").notNull().default("running"),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  runId: integer("run_id"),
+  error: text("error"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+/** Durable, retryable audit trail for alert email attempts. */
+export const monitoringAlertNotifications = sqliteTable("monitoring_alert_notifications", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  alertId: integer("alert_id").notNull(),
+  runId: integer("run_id").notNull(),
+  channel: text("channel").notNull().default("email"),
+  recipient: text("recipient").notNull(),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  providerMessageId: text("provider_message_id"),
+  error: text("error"),
+  deliveredAt: text("delivered_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
