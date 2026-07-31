@@ -132,7 +132,10 @@ export function initializeDatabase(sqlite: Database.Database) {
       last_triggered_at TEXT,
       acknowledged_by TEXT,
       acknowledged_at TEXT,
+      acknowledgement_note TEXT,
+      resolved_by TEXT,
       resolved_at TEXT,
+      resolution_note TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -176,6 +179,9 @@ export function initializeDatabase(sqlite: Database.Database) {
   ensureColumn(sqlite, "monitoring_alerts", "occurrence_count", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(sqlite, "monitoring_alerts", "first_triggered_at", "TEXT");
   ensureColumn(sqlite, "monitoring_alerts", "last_triggered_at", "TEXT");
+  ensureColumn(sqlite, "monitoring_alerts", "acknowledgement_note", "TEXT");
+  ensureColumn(sqlite, "monitoring_alerts", "resolved_by", "TEXT");
+  ensureColumn(sqlite, "monitoring_alerts", "resolution_note", "TEXT");
 
   sqlite.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS monitoring_runs_job_ingest_key_idx
