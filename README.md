@@ -21,7 +21,7 @@ The beta is centered on operational alerts rather than a dashboard people may fo
 - **Override provenance:** intentional exceptions should record who decided, why, when, and optionally when the override expires.
 - **Read-only by default:** no automatic access grant or revocation.
 
-The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, aggregate operator read APIs, a retry-safe nightly scheduler, a customer-owned HTTPS source-adapter contract, and Resend email delivery. Operator UI and acknowledgement endpoints remain later milestones.
+The current implementation includes persistent jobs and runs, finding observations and lifecycle, fixed-reference alert evaluation, authenticated run ingestion, alert deduplication, monitoring-job bootstrap/configuration, aggregate operator read APIs, a retry-safe nightly scheduler, a customer-owned HTTPS source-adapter contract, Resend email delivery, alert acknowledgement/resolution provenance, and a minimal operator UI.
 
 ## Monitoring job bootstrap and operator API
 
@@ -47,8 +47,31 @@ Available operator endpoints:
 - `POST /api/monitoring/jobs` — bootstrap a job and its alert thresholds.
 - `GET /api/monitoring/jobs/{jobId}?runs=30` — read one job, recent runs, active alert incidents, queue age, and category counts.
 - `PATCH /api/monitoring/jobs/{jobId}` — change the name, schedule, active/paused state, or alert thresholds.
+- `PATCH /api/monitoring/alerts/{alertId}` — acknowledge or resolve one alert incident with actor and optional note provenance.
 
-The operator responses deliberately omit finding fingerprints and all raw entitlement identities. They expose only job configuration, aggregate run state, alert candidates, counts, and timestamps. Use a separate operator token from the ingestion token so a source adapter cannot reconfigure its own monitoring policy.
+Example alert action:
+
+```json
+{
+  "action": "acknowledge",
+  "actor": "on-call@example.com",
+  "note": "Investigating the entitlement write path"
+}
+```
+
+The operator responses deliberately omit finding fingerprints and all raw entitlement identities. They expose only job configuration, aggregate run state, alert candidates, counts, timestamps, and operator provenance. Use a separate operator token from the ingestion token so a source adapter cannot reconfigure its own monitoring policy.
+
+## Monitoring operator UI
+
+`/admin/monitoring` is protected by the same HTTP Basic authentication as `/admin`. It shows:
+
+- current job health and latest-run aggregates;
+- paid-but-blocked count, mismatch rate, actionable queue size, and oldest unresolved age;
+- active alert incidents with acknowledge and resolve forms;
+- recent monitoring runs and alert history;
+- acknowledgement and resolution actor, timestamp, and notes.
+
+Set `MONITORING_OPERATOR_NAME` to the name or email written by UI actions. It defaults to `admin`. Resolving an alert does not alter customer access; it closes only the monitoring incident. If the underlying condition remains present in the next complete run, a new incident opens.
 
 ## Monitoring run ingestion
 
@@ -223,10 +246,11 @@ The repository includes a multi-stage `Dockerfile` and `docker-compose.yml`.
 1. In Coolify, add a Docker Compose resource pointing at this repository.
 2. Configure the generated FQDN or override it with the intended domain.
 3. Keep the `entitleguard-data` named volume mounted so the SQLite database at `/data/entitleguard.db` persists across deploys.
-4. Set a strong `MONITORING_OPERATOR_TOKEN` to enable private job configuration/read endpoints.
-5. Set a different strong `MONITORING_INGEST_TOKEN` only when the private run-ingestion endpoint should be enabled.
-6. Configure `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_URL`, optional `MONITORING_SOURCE_TOKEN`, `MONITORING_ALERT_TO`, `MONITORING_ALERT_FROM`, and `RESEND_API_KEY` for nightly monitoring.
-7. Add a nightly cron request to `POST /api/monitoring/scheduler/run` with the scheduler bearer token.
+4. Set a strong `MONITORING_OPERATOR_TOKEN` to enable private job configuration/read/action endpoints.
+5. Optionally set `MONITORING_OPERATOR_NAME` for UI action provenance.
+6. Set a different strong `MONITORING_INGEST_TOKEN` only when the private run-ingestion endpoint should be enabled.
+7. Configure `MONITORING_SCHEDULER_TOKEN`, `MONITORING_SOURCE_URL`, optional `MONITORING_SOURCE_TOKEN`, `MONITORING_ALERT_TO`, `MONITORING_ALERT_FROM`, and `RESEND_API_KEY` for nightly monitoring.
+8. Add a nightly cron request to `POST /api/monitoring/scheduler/run` with the scheduler bearer token.
 
 Run elsewhere with:
 
@@ -238,17 +262,19 @@ The container listens on port 3000.
 
 ## Admin page
 
-The read-only `/admin` dashboard lists captured leads, aggregate audit summaries, analytics funnel events, and landing traffic sources. It is protected by HTTP Basic authentication through `ADMIN_PASSWORD`. If the variable is unset, `/admin` returns 404.
+The `/admin` dashboard lists captured leads, aggregate audit summaries, analytics funnel events, and landing traffic sources. `/admin/monitoring` is the minimal monitoring operator UI. Both are protected by HTTP Basic authentication through `ADMIN_PASSWORD`. If the variable is unset, `/admin` routes return 404.
 
 ## Project layout
 
 - `src/lib/engine/` — parsing, mapping, normalization, matching, classification, leakage estimation, masking
-- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, job configuration, operator read models, nightly scheduling, email delivery, and alert evaluation
+- `src/lib/monitoring/` — run ingestion, finding lifecycle, fixed-reference selection, job configuration, operator read models, alert actions, nightly scheduling, email delivery, and alert evaluation
 - `src/lib/export-sql-templates.ts` — minimal users/workspaces export SQL
 - `src/workers/reconcile.worker.ts` — browser-side reconciliation worker
 - `src/components/audit/` — upload, mapping, run, and results flow
 - `src/db/` — SQLite schema for leads, analytics, monitoring jobs, runs, findings, observations, alerts, scheduler claims, and email deliveries
+- `src/app/admin/monitoring` — Basic-authenticated operator UI and server actions
 - `src/app/api/monitoring/jobs` — authenticated job bootstrap, configuration, and aggregate operator read endpoints
+- `src/app/api/monitoring/alerts` — authenticated acknowledgement and resolution endpoint
 - `src/app/api/monitoring/runs` — authenticated, strict, pseudonymous run-ingestion endpoint
 - `src/app/api/monitoring/scheduler/run` — authenticated nightly scheduler trigger
 - `docs/monitoring-scheduler.md` — source-adapter and delivery contract
