@@ -12,8 +12,21 @@ services:
       # Set in Coolify env vars to enable the read-only /admin page
       # (Basic auth, user "admin"). Unset = /admin returns 404.
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Monitoring beta endpoints remain disabled unless their tokens are set.
+      - MONITORING_INGEST_TOKEN=${MONITORING_INGEST_TOKEN:-}
+      - MONITORING_OPERATOR_TOKEN=${MONITORING_OPERATOR_TOKEN:-}
+      - MONITORING_SCHEDULER_TOKEN=${MONITORING_SCHEDULER_TOKEN:-}
+      # The scheduler calls one HTTPS source adapter for each active nightly job.
+      - MONITORING_SOURCE_URL=${MONITORING_SOURCE_URL:-}
+      - MONITORING_SOURCE_TOKEN=${MONITORING_SOURCE_TOKEN:-}
+      # Comma-separated recipients. Resend is used through its HTTPS API.
+      - MONITORING_ALERT_TO=${MONITORING_ALERT_TO:-}
+      - MONITORING_ALERT_FROM=${MONITORING_ALERT_FROM:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MONITORING_PUBLIC_URL=${MONITORING_PUBLIC_URL:-}
     volumes:
-      # Persists leads, audit summaries, and analytics events across deploys.
+      # Persists leads, audit summaries, analytics events, monitoring history,
+      # scheduler claims, and notification delivery records across deploys.
       - entitleguard-data:/data
     expose:
       - "3000"
