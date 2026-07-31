@@ -9,6 +9,7 @@ export const ANALYTICS_EVENTS = [
   "mismatches_found",
   "no_mismatches_found",
   "full_report_requested",
+  "monitoring_cta_clicked",
   "beta_signup_submitted",
   "call_booked",
   "mapping_dropoff",

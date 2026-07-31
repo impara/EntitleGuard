@@ -111,7 +111,7 @@ export default function LandingPage() {
             >
               Run free local audit
             </Link>
-            <MonitoringBetaButton className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
+            <MonitoringBetaButton source="hero" className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
               Apply for monitoring beta — $79/month
             </MonitoringBetaButton>
           </div>
@@ -151,7 +151,7 @@ export default function LandingPage() {
                   overridden.
                 </p>
               </div>
-              <MonitoringBetaButton className="shrink-0 rounded-lg bg-accent-strong px-5 py-2.5 font-semibold text-background hover:opacity-90">
+              <MonitoringBetaButton source="monitoring_section" className="shrink-0 rounded-lg bg-accent-strong px-5 py-2.5 font-semibold text-background hover:opacity-90">
                 Apply for the beta
               </MonitoringBetaButton>
             </div>
@@ -397,7 +397,7 @@ export default function LandingPage() {
               >
                 Run free local audit
               </Link>
-              <MonitoringBetaButton className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
+              <MonitoringBetaButton source="final_cta" className="rounded-lg border border-accent/50 px-6 py-3 font-semibold text-accent hover:bg-accent/10">
                 Apply for monitoring beta
               </MonitoringBetaButton>
             </div>

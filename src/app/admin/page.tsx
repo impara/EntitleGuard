@@ -74,6 +74,7 @@ export default function AdminPage() {
     "mismatches_found",
     "no_mismatches_found",
     "full_report_requested",
+    "monitoring_cta_clicked",
     "beta_signup_submitted",
     "call_booked",
   ];
@@ -114,6 +115,7 @@ export default function AdminPage() {
                   <th className="px-3 py-2">Billing / DB</th>
                   <th className="px-3 py-2">Request</th>
                   <th className="px-3 py-2">Beta interests</th>
+                  <th className="px-3 py-2">Support incidents</th>
                   <th className="px-3 py-2">Audit summary</th>
                 </tr>
               </thead>
@@ -144,6 +146,9 @@ export default function AdminPage() {
                       </td>
                       <td className="px-3 py-2 text-muted">
                         {parseInterests(lead.betaInterests)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-muted">
+                        {lead.supportIncidentFrequency?.replaceAll("_", " ") ?? "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-muted">
                         {summary
