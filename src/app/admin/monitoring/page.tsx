@@ -43,10 +43,13 @@ function scalarParam(value: string | string[] | undefined): string | null {
 
 function healthClasses(health: string): string {
   switch (health) {
+    case "failed":
     case "critical":
       return "border-red-500/40 bg-red-500/10 text-red-700";
+    case "stale":
     case "warning":
       return "border-amber-500/40 bg-amber-500/10 text-amber-700";
+    case "fresh":
     case "healthy":
       return "border-green-500/40 bg-green-500/10 text-green-700";
     default:
@@ -181,6 +184,18 @@ export default async function MonitoringAdminPage({ searchParams }: PageProps) {
                 >
                   {detail.health.replaceAll("_", " ")}
                 </span>
+              </div>
+
+              <div className={`mb-5 rounded-xl border p-3 text-sm ${healthClasses(detail.dataHealth.status)}`}>
+                <p className="font-semibold">
+                  Monitoring data: {detail.dataHealth.status.replaceAll("_", " ")}
+                </p>
+                <p>
+                  Snapshot freshness limit: {detail.dataHealth.maxAgeHours} hours.
+                  {detail.dataHealth.status !== "fresh" && detail.dataHealth.status !== "paused"
+                    ? " Check the scheduler, source adapter, and delivery logs. No alerts does not mean all accounts are healthy."
+                    : " Access incidents and monitoring health are evaluated separately."}
+                </p>
               </div>
 
               <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

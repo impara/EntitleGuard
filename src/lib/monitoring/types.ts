@@ -38,6 +38,8 @@ export interface MonitoringAlertCandidate {
   currentValue: number;
   threshold: number;
   referenceValue?: number;
+  /** Internal finding ID + incident start; never a customer identifier or fingerprint. */
+  findingIncidents?: string[];
 }
 
 export interface EvaluateMonitoringAlertsInput {
@@ -69,6 +71,8 @@ export interface IngestMonitoringRunInput {
   source?: "manual" | "api" | "scheduled";
   /** Required because absence is interpreted as resolution. Partial snapshots are unsafe. */
   completeSnapshot: true;
+  /** One-run operator confirmation of an expected source-count collapse. Not an adapter default. */
+  allowSourceCountDrop?: boolean;
   startedAt: string;
   completedAt: string;
   totalAppRecords: number;

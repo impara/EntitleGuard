@@ -33,6 +33,7 @@ const runSchema = z
     idempotencyKey: z.string().trim().min(1).max(128),
     source: z.enum(["manual", "api", "scheduled"]).optional(),
     completeSnapshot: z.literal(true),
+    allowSourceCountDrop: z.boolean().optional(),
     startedAt: timestampSchema,
     completedAt: timestampSchema,
     totalAppRecords: z.number().int().nonnegative(),
@@ -71,7 +72,9 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
     if (error instanceof MonitoringIngestError) {
-      const status = error.code === "JOB_NOT_FOUND" ? 404 : error.code === "JOB_INACTIVE" ? 409 : 400;
+      const status = error.code === "JOB_NOT_FOUND" ? 404
+        : error.code === "JOB_INACTIVE" || error.code === "STALE_RUN" ? 409
+        : error.code === "SUSPICIOUS_SNAPSHOT" ? 422 : 400;
       return NextResponse.json({ error: error.message, code: error.code }, { status });
     }
     console.error("Monitoring run ingestion failed", error);

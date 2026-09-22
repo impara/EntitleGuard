@@ -16,11 +16,11 @@ function fingerprint(character: string): string {
   return character.repeat(64);
 }
 
-function snapshot() {
+function snapshot(day = "2026-08-01") {
   return {
     completeSnapshot: true,
-    startedAt: "2026-08-01T00:00:00.000Z",
-    completedAt: "2026-08-01T00:00:12.000Z",
+    startedAt: `${day}T00:00:00.000Z`,
+    completedAt: `${day}T00:00:12.000Z`,
     totalAppRecords: 100,
     totalStripeRecords: 100,
     findings: [
@@ -64,7 +64,8 @@ describe("nightly monitoring scheduler", () => {
       calls.push(url);
       if (url === config.sourceUrl) {
         expect(init?.headers).toMatchObject({ Authorization: "Bearer source-secret" });
-        return Response.json(snapshot());
+        const { scheduleKey } = JSON.parse(String(init?.body)) as { scheduleKey: string };
+        return Response.json(snapshot(scheduleKey));
       }
       if (url === "https://api.resend.com/emails") {
         const body = JSON.parse(String(init?.body)) as { subject: string; to: string[] };

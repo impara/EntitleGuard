@@ -1,12 +1,14 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   db as defaultDb,
   monitoringAlerts,
   monitoringFindings,
   monitoringJobs,
   monitoringRuns,
+  monitoringScheduleExecutions,
   type DatabaseClient,
 } from "../../db";
+import { monitoringDataHealth, type MonitoringDataHealth } from "./reliability";
 import type {
   MonitoringAlertSeverity,
   MonitoringAlertStatus,
@@ -16,7 +18,7 @@ import type {
 
 export type MonitoringJobStatus = "active" | "paused";
 export type MonitoringJobSchedule = "nightly" | "manual";
-export type MonitoringJobHealth = "critical" | "warning" | "healthy" | "no_data" | "paused";
+export type MonitoringJobHealth = "critical" | "warning" | "healthy" | "no_data" | "paused" | "stale" | "failed";
 
 export interface MonitoringJobConfig {
   id: number;
@@ -90,6 +92,7 @@ export interface MonitoringFindingSummary {
 export interface MonitoringJobOverview {
   job: MonitoringJobConfig;
   health: MonitoringJobHealth;
+  dataHealth: MonitoringDataHealth;
   latestRun: MonitoringRunView | null;
   activeAlertCounts: {
     critical: number;
@@ -282,13 +285,13 @@ function findingSummary(
 
 function healthFor(
   job: MonitoringJobConfig,
-  latestRun: MonitoringRunView | null,
+  dataHealth: MonitoringDataHealth,
   alerts: MonitoringAlertView[],
 ): MonitoringJobHealth {
   if (job.status === "paused") return "paused";
   if (alerts.some((alert) => alert.severity === "critical")) return "critical";
   if (alerts.some((alert) => alert.severity === "warning")) return "warning";
-  return latestRun ? "healthy" : "no_data";
+  return dataHealth.status === "fresh" ? "healthy" : dataHealth.status;
 }
 
 function loadJob(database: DatabaseClient, jobId: number): typeof monitoringJobs.$inferSelect {
@@ -403,7 +406,7 @@ export function getMonitoringJobDetail(
     .select()
     .from(monitoringRuns)
     .where(eq(monitoringRuns.jobId, jobId))
-    .orderBy(desc(monitoringRuns.completedAt))
+    .orderBy(desc(sql`julianday(${monitoringRuns.completedAt})`))
     .limit(recentRunLimit)
     .all()
     .map(rowToRun);
@@ -428,6 +431,14 @@ export function getMonitoringJobDetail(
     .all();
 
   const latestRun = recentRuns[0] ?? null;
+  const latestExecution = database
+    .select()
+    .from(monitoringScheduleExecutions)
+    .where(eq(monitoringScheduleExecutions.jobId, jobId))
+    .orderBy(desc(sql`julianday(${monitoringScheduleExecutions.updatedAt})`))
+    .limit(1)
+    .get();
+  const dataHealth = monitoringDataHealth(job.status, latestRun, latestExecution ?? null, now);
   const activeAlertCounts = {
     critical: activeAlerts.filter((alert) => alert.severity === "critical").length,
     warning: activeAlerts.filter((alert) => alert.severity === "warning").length,
@@ -435,7 +446,8 @@ export function getMonitoringJobDetail(
 
   return {
     job,
-    health: healthFor(job, latestRun, activeAlerts),
+    health: healthFor(job, dataHealth, activeAlerts),
+    dataHealth,
     latestRun,
     activeAlertCounts,
     findings: findingSummary(openFindings, now),
@@ -458,6 +470,7 @@ export function listMonitoringJobOverviews(
       return {
         job: detail.job,
         health: detail.health,
+        dataHealth: detail.dataHealth,
         latestRun: detail.latestRun,
         activeAlertCounts: detail.activeAlertCounts,
         findings: detail.findings,

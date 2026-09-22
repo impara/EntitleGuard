@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   db as defaultDb,
   monitoringAlerts,
@@ -9,6 +9,12 @@ import {
   type DatabaseClient,
 } from "../../db";
 import { evaluateMonitoringAlerts, selectFixedReferenceRun } from "./evaluate-alerts";
+import {
+  hasNewFindingIncidents,
+  MONITORING_CLOCK_SKEW_MS,
+  snapshotIsStale,
+  sourceCountCollapsed,
+} from "./reliability";
 import type {
   IngestMonitoringRunInput,
   IngestMonitoringRunResult,
@@ -26,7 +32,9 @@ export type MonitoringIngestErrorCode =
   | "JOB_NOT_FOUND"
   | "JOB_INACTIVE"
   | "INVALID_RUN"
-  | "INVALID_FINDING";
+  | "INVALID_FINDING"
+  | "STALE_RUN"
+  | "SUSPICIOUS_SNAPSHOT";
 
 export class MonitoringIngestError extends Error {
   constructor(
@@ -53,12 +61,24 @@ function validateInput(input: IngestMonitoringRunInput): void {
   if (!input.idempotencyKey.trim()) {
     throw new MonitoringIngestError("INVALID_RUN", "idempotencyKey is required");
   }
-  if (input.totalAppRecords < 0 || input.totalStripeRecords < 0) {
-    throw new MonitoringIngestError("INVALID_RUN", "record counts cannot be negative");
+  if (input.completeSnapshot !== true) {
+    throw new MonitoringIngestError("INVALID_RUN", "completeSnapshot must be true");
+  }
+  if (input.allowSourceCountDrop !== undefined && typeof input.allowSourceCountDrop !== "boolean") {
+    throw new MonitoringIngestError("INVALID_RUN", "allowSourceCountDrop must be a boolean");
+  }
+  if (
+    !Number.isSafeInteger(input.totalAppRecords) || input.totalAppRecords < 0 ||
+    !Number.isSafeInteger(input.totalStripeRecords) || input.totalStripeRecords < 0
+  ) {
+    throw new MonitoringIngestError("INVALID_RUN", "record counts must be nonnegative safe integers");
   }
 
   const startedAt = parseDate(input.startedAt, "startedAt");
   const completedAt = parseDate(input.completedAt, "completedAt");
+  if (completedAt.getTime() > Date.now() + MONITORING_CLOCK_SKEW_MS) {
+    throw new MonitoringIngestError("INVALID_RUN", "completedAt cannot be in the future");
+  }
   if (completedAt.getTime() < startedAt.getTime()) {
     throw new MonitoringIngestError("INVALID_RUN", "completedAt cannot be before startedAt");
   }
@@ -132,7 +152,7 @@ function alertState(row: {
   };
 }
 
-function loadActiveAlerts(database: DatabaseClient, jobId: number): MonitoringAlertState[] {
+function loadActiveAlerts(database: Pick<DatabaseClient, "select">, jobId: number): MonitoringAlertState[] {
   return database
     .select({
       id: monitoringAlerts.id,
@@ -154,7 +174,7 @@ function loadActiveAlerts(database: DatabaseClient, jobId: number): MonitoringAl
 }
 
 function idempotentResult(
-  database: DatabaseClient,
+  database: Pick<DatabaseClient, "select">,
   run: { id: number; jobId: number; referenceRunId: number | null },
 ): IngestMonitoringRunResult {
   const openFindingCount = database
@@ -192,33 +212,12 @@ export function ingestMonitoringRun(
 ): IngestMonitoringRunResult {
   validateInput(input);
 
-  const existingRun = database
-    .select({
-      id: monitoringRuns.id,
-      jobId: monitoringRuns.jobId,
-      referenceRunId: monitoringRuns.referenceRunId,
-    })
-    .from(monitoringRuns)
-    .where(
-      and(
-        eq(monitoringRuns.jobId, input.jobId),
-        eq(monitoringRuns.ingestKey, input.idempotencyKey),
-      ),
-    )
-    .get();
-  if (existingRun) return idempotentResult(database, existingRun);
-
-  const job = database
-    .select()
-    .from(monitoringJobs)
-    .where(eq(monitoringJobs.id, input.jobId))
-    .get();
-  if (!job) {
-    throw new MonitoringIngestError("JOB_NOT_FOUND", `monitoring job ${input.jobId} was not found`);
-  }
-  if (job.status !== "active") {
-    throw new MonitoringIngestError("JOB_INACTIVE", `monitoring job ${input.jobId} is not active`);
-  }
+  // Normalize persisted timestamps, including offset-bearing API input.
+  input = {
+    ...input,
+    startedAt: parseDate(input.startedAt, "startedAt").toISOString(),
+    completedAt: parseDate(input.completedAt, "completedAt").toISOString(),
+  };
 
   const completedAtDate = parseDate(input.completedAt, "completedAt");
   const actionableFindings = input.findings.filter(
@@ -240,6 +239,59 @@ export function ingestMonitoringRun(
   };
 
   return database.transaction((tx) => {
+    // Check idempotency and freshness under the same write lock as mutation.
+    const existingRun = tx
+      .select({
+        id: monitoringRuns.id,
+        jobId: monitoringRuns.jobId,
+        referenceRunId: monitoringRuns.referenceRunId,
+      })
+      .from(monitoringRuns)
+      .where(
+        and(
+          eq(monitoringRuns.jobId, input.jobId),
+          eq(monitoringRuns.ingestKey, input.idempotencyKey),
+        ),
+      )
+      .get();
+    if (existingRun) return idempotentResult(tx, existingRun);
+
+    const job = tx
+      .select()
+      .from(monitoringJobs)
+      .where(eq(monitoringJobs.id, input.jobId))
+      .get();
+    if (!job) {
+      throw new MonitoringIngestError("JOB_NOT_FOUND", `monitoring job ${input.jobId} was not found`);
+    }
+    if (job.status !== "active") {
+      throw new MonitoringIngestError("JOB_INACTIVE", `monitoring job ${input.jobId} is not active`);
+    }
+
+    const previousRun = tx
+      .select()
+      .from(monitoringRuns)
+      .where(and(eq(monitoringRuns.jobId, input.jobId), eq(monitoringRuns.status, "completed")))
+      .orderBy(desc(sql`julianday(${monitoringRuns.completedAt})`))
+      .limit(1)
+      .get();
+    if (previousRun && snapshotIsStale(input, previousRun)) {
+      throw new MonitoringIngestError(
+        "STALE_RUN",
+        "snapshot must be newer than the last accepted run and must not start before it",
+      );
+    }
+    if (
+      previousRun && !input.allowSourceCountDrop &&
+      (sourceCountCollapsed(previousRun.totalAppRecords, input.totalAppRecords) ||
+        sourceCountCollapsed(previousRun.totalStripeRecords, input.totalStripeRecords))
+    ) {
+      throw new MonitoringIngestError(
+        "SUSPICIOUS_SNAPSHOT",
+        "source count collapsed; verify completeness before explicitly confirming allowSourceCountDrop",
+      );
+    }
+
     const historicalRuns = tx
       .select({
         id: monitoringRuns.id,
@@ -253,7 +305,7 @@ export function ingestMonitoringRun(
       })
       .from(monitoringRuns)
       .where(eq(monitoringRuns.jobId, input.jobId))
-      .orderBy(desc(monitoringRuns.completedAt))
+      .orderBy(desc(sql`julianday(${monitoringRuns.completedAt})`))
       .limit(100)
       .all()
       .map<MonitoringRunSnapshot>((run) => ({
@@ -401,6 +453,10 @@ export function ingestMonitoringRun(
       .map((finding) => finding.firstSeenAt)
       .sort()[0] ?? null;
 
+    const findingIncidents = queueFindings
+      .filter((finding) => finding.category === "B")
+      .map((finding) => `${finding.id}:${finding.firstSeenRunId ?? finding.firstSeenAt}`)
+      .sort();
     const alertCandidates = evaluateMonitoringAlerts({
       run: { ...currentSnapshot, id: runId },
       referenceRun,
@@ -432,8 +488,29 @@ export function ingestMonitoringRun(
 
     let createdAlerts = 0;
     let deduplicatedAlerts = 0;
+    let resolvedAlerts = 0;
     for (const candidate of alertCandidates) {
-      const activeAlert = activeAlertsByKey.get(candidate.dedupeKey);
+      if (candidate.type === "paid_blocked") candidate.findingIncidents = findingIncidents;
+      let activeAlert = activeAlertsByKey.get(candidate.dedupeKey);
+      if (
+        activeAlert && candidate.type === "paid_blocked" &&
+        hasNewFindingIncidents(activeAlert.details, findingIncidents)
+      ) {
+        // A stale UI acknowledgement must not cover newly affected accounts.
+        // Keep the previous acknowledgement on its own historical incident.
+        tx.update(monitoringAlerts)
+          .set({
+            status: "resolved",
+            resolvedAt: input.completedAt,
+            resolvedRunId: runId,
+            resolutionNote: "Superseded by a new paid-but-blocked account set; underlying findings may remain open.",
+            updatedAt: input.completedAt,
+          })
+          .where(eq(monitoringAlerts.id, activeAlert.id))
+          .run();
+        resolvedAlerts += 1;
+        activeAlert = undefined;
+      }
       if (activeAlert) {
         tx.update(monitoringAlerts)
           .set({
@@ -473,7 +550,6 @@ export function ingestMonitoringRun(
       }
     }
 
-    let resolvedAlerts = 0;
     for (const alert of activeAlerts) {
       if (!triggeredKeys.has(alert.dedupeKey)) {
         tx.update(monitoringAlerts)
@@ -526,5 +602,5 @@ export function ingestMonitoringRun(
         active: resultingActiveAlerts,
       },
     };
-  });
+  }, { behavior: "immediate" });
 }
