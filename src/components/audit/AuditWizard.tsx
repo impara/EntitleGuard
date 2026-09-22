@@ -154,6 +154,7 @@ export function AuditWizard({ demo = false }: AuditWizardProps) {
         const s = msg.result.summary;
         const mismatches = s.unpaidActiveCount + s.paidBlockedCount;
         track("audit_completed", {
+          mode: state.isDemo ? "demo" : "uploaded",
           highConfidence: s.highConfidenceMismatches,
           dataQuality: s.dataQualityScore,
           exposureBucket: exposureBucket(s.leakage.estimatedMonthly),
@@ -187,7 +188,14 @@ export function AuditWizard({ demo = false }: AuditWizardProps) {
       },
     };
     worker.postMessage({ type: "run", input });
-  }, [state.appCsv, state.appMapping, state.fallbackValue, state.stripeCsv, state.stripeMapping]);
+  }, [
+    state.appCsv,
+    state.appMapping,
+    state.fallbackValue,
+    state.isDemo,
+    state.stripeCsv,
+    state.stripeMapping,
+  ]);
 
   const validation = mappingValidation(state);
 
